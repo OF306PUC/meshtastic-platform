@@ -1,0 +1,97 @@
+% Mesh membership and connectors: who configures what on each radio.
+% Build from this folder: pdflatex membership.tex  (font and colours: palette.tex).
+\documentclass[tikz,border=6pt]{standalone}
+\input{palette}
+
+\begin{document}
+\begin{tikzpicture}[font=\small]
+
+% ── The radios: one mesh, one membership ──────────────────────────────────────
+\node[radio] (N) at (0,0)    {\textbf{node}\\[-1pt]\radiosub{SenseCAP · SX1262}};
+\node[radio] (P) at (4.3,0)  {\textbf{pbx radio}\\[-1pt]\radiosub{LILYGO T-Beam}};
+\node[radio] (R) at (8.6,0)  {\textbf{receiver radio}\\[-1pt]\radiosub{LILYGO T-Beam}};
+\node[radio] (G) at (12.9,0) {\textbf{gateway radio}\\[-1pt]\radiosub{LILYGO T-Beam}};
+
+\draw[air] (N) -- (P);
+\draw[air] (P) -- (R);
+\draw[air] (R) -- (G);
+
+\begin{scope}[on background layer]
+  \node[draw=lorablue, dashed, thick, rounded corners=8pt, fill=lorablue!5,
+        inner xsep=12pt, inner ysep=14pt, fit=(N)(P)(R)(G)] (mesh) {};
+\end{scope}
+\node[note, text=lorablue!80!black, rotate=90, anchor=south] at (mesh.west) {LoRa mesh};
+
+% ── The platform writes membership from the deployment file ───────────────────
+\node[platform, minimum width=34mm] (S) at (6.45,3.6)
+  {\textbf{meshtastic-platform}\\[-1pt]{\scriptsize configure.py provision · inspect}};
+\node[platform, minimum width=30mm, left=22mm of S] (F)
+  {\textbf{deployments/\textless name\textgreater.yaml}\\[-1pt]{\scriptsize the application}};
+\draw[->, thick, draw=mtgreen7] (F) -- node[above, note] {reads} (S);
+
+\foreach \r in {N,P,R,G}
+  \draw[member] (S.south) to[out=-90, in=90, looseness=0.6] (\r.north);
+
+\node[note, text=mtgreen7, right=6mm of S, align=left] (M)
+  {\textbf{membership}\\
+   mesh-wide: region · preset · slot · channels + PSKs\\
+   per radio: role · hop limit · tx\_power · cadences};
+
+% ── What each radio is connected to ───────────────────────────────────────────
+\node[other, below=19mm of N, minimum width=24mm] (sens) {SHT4X sensor};
+\draw[<->, thick, draw=mtdark!45] (N) -- node[right, note] {I\textsuperscript{2}C} (sens);
+
+\node[pbx, below=19mm of P, minimum width=31mm] (X)
+  {\textbf{meshpbx module}\\[-1pt]{\scriptsize nRF54L15 (nRF52840 DK today)}};
+\draw[conn] (P) -- node[right, note, text=amber!80!black, align=left]
+  {UART · PROTO\\Bluetooth off} (X);
+
+\node[other, minimum height=7mm, minimum width=13mm, font=\scriptsize]
+  (ph1) at ($(X)+(-1.45,-2.0)$) {phone 1};
+\node[other, minimum height=7mm, minimum width=13mm, font=\scriptsize]
+  (ph2) at ($(X)+(0,-2.0)$) {phone 2};
+\node (phd) at ($(X)+(0.95,-2.0)$) {$\cdots$};
+\node[other, minimum height=7mm, minimum width=13mm, font=\scriptsize]
+  (phn) at ($(X)+(1.9,-2.0)$) {phone \textit{n}};
+\foreach \p in {ph1,ph2,phn}
+  \draw[densely dotted, thick, draw=mtdark!45] (X) -- (\p);
+\node[note, text=mtdark!70, below=1mm of ph2] {BLE · any number of phones};
+
+\node[platform, below=19mm of R, minimum width=28mm] (L)
+  {\textbf{laptop}\\[-1pt]{\scriptsize receiver.py · channel study}};
+\draw[conn] (R) -- node[right, note, text=amber!80!black] {USB serial} (L);
+
+\node[gateway, below=19mm of G, minimum width=30mm] (H)
+  {\textbf{meshtastic-gateway}\\[-1pt]{\scriptsize Raspberry Pi / Jetson}};
+\draw[conn] (G) -- node[right, note, text=amber!80!black] {USB serial} (H);
+\node[gateway, below=10mm of H, minimum width=30mm] (D)
+  {\scriptsize ingestion · PDR · dashboard};
+\draw[->, thick, draw=mtdark!70] (H) -- (D);
+
+% The gateway shares no code with the platform: only a copy of the deployment file.
+\draw[dep] (F.north) -- ++(0,0.55) -| ($(H.east)+(1.3,0)$)
+  node[pos=0.3, above, note, text=mtdark] {an identical copy of the deployment file (same SHA-256)}
+  -- (H.east);
+
+% ── Legend ────────────────────────────────────────────────────────────────────
+\begin{scope}[shift={($(sens.south west)+(-0.2,-3.3)$)}, note]
+  \draw[member] (0,0) -- ++(0.9,0)
+    node[right, align=left] {membership: written by meshtastic-platform from the deployment file};
+  \draw[conn] (0,-0.5) -- ++(0.9,0)
+    node[right, align=left] {connector: owned by what the radio is attached to (the PBX project configures the pbx link)};
+  \draw[dep] (0,-1.0) -- ++(0.9,0)
+    node[right, align=left] {the only link to the gateway: the deployment file (no shared code)};
+  \draw[air] (0,-1.5) -- ++(0.9,0)
+    node[right, align=left] {LoRa};
+  \node[radio, minimum height=3mm, minimum width=5mm, inner sep=0pt, thick] at (12.0,0) {};
+  \node[right, align=left] at (12.35,0) {Meshtastic radio};
+  \foreach \y/\sty/\txt in {-0.5/platform/{meshtastic-platform (this repository)},
+                              -1.0/pbx/{meshpbx (submodule in external/)},
+                              -1.5/gateway/{meshtastic-gateway}} {
+    \node[\sty, minimum height=3mm, minimum width=5mm, inner sep=0pt] at (12.0,\y) {};
+    \node[right, align=left] at (12.35,\y) {\txt};
+  }
+\end{scope}
+
+\end{tikzpicture}
+\end{document}

@@ -1,0 +1,3 @@
+[submodule "external/meshpbx"]
+	path = external/meshpbx
+	url = https://github.com/OF306PUC/meshpbx

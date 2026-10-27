@@ -1,0 +1,121 @@
+% Inside a PBX: the meshpbx module, the radio that connects it to the mesh, and
+% who configures which part of that radio.
+% Build from this folder: pdflatex pbx-connector.tex  (font and colours: palette.tex).
+\documentclass[tikz,border=6pt]{standalone}
+\input{palette}
+
+\begin{document}
+\begin{tikzpicture}[
+    font=\small,
+    blk/.style={draw, rounded corners=2pt, fill=white, align=center, font=\scriptsize,
+                inner sep=3pt, minimum height=8.5mm},
+    mblk/.style={blk, draw=amber!80!black, minimum width=38mm},
+    rblk/.style={blk, very thick, minimum width=36mm, text=mtdark},
+    flow/.style={<->, thick},
+]
+
+% ── The meshpbx module ────────────────────────────────────────────────────────
+\node[mblk] (mU) at (4.4, 1.45)
+  {\textbf{upstream session}\\UART keepalive · watchdogs};
+\node[mblk] (mR) at (4.4, 0.15)
+  {\textbf{router}\\to every phone, or to one by its header};
+\node[mblk] (mC) at (4.4,-1.15)
+  {\textbf{per-phone sessions}\\each phone sees a node of its own};
+\node[mblk] (mB) at (4.4,-2.45)
+  {\textbf{BLE GATT service}\\the Meshtastic phone interface};
+\node[align=center] (mT) at ($(mU.north)+(0,0.62)$)
+  {\textbf{meshpbx module}\\[-1pt]{\scriptsize nRF54L15 · Zephyr}};
+\foreach \a/\b in {mB/mC, mC/mR, mR/mU}
+  \draw[flow, draw=amber!80!black] (\a) -- (\b);
+\begin{scope}[on background layer]
+  \node[pbx, fit=(mT)(mU)(mB), inner sep=7pt] (M) {};
+\end{scope}
+
+% ── The phones: any number, over BLE ──────────────────────────────────────────
+\node[other, minimum height=7mm, minimum width=14mm, font=\scriptsize] (ph1) at (0, 0.4) {phone 1};
+\node[other, minimum height=7mm, minimum width=14mm, font=\scriptsize] (ph2) at (0,-0.7) {phone 2};
+\node (phd) at (0,-1.55) {$\vdots$};
+\node[other, minimum height=7mm, minimum width=14mm, font=\scriptsize] (phn) at (0,-2.4) {phone \textit{n}};
+\foreach \p in {ph1,ph2,phn}
+  \draw[densely dotted, thick, draw=mtdark!50] (\p.east) -- (mB.west);
+\node[note, text=mtdark!70, below=1mm of phn] {BLE};
+
+% ── The radio: connector on top, membership below ─────────────────────────────
+\node[rblk, draw=amber] (rS) at (12.4, 1.45)
+  {\textbf{serial module · PROTO}\\pins · baud · Bluetooth off};
+\node[rblk, draw=mtgreen] (rA) at (12.4, 0.0)
+  {\textbf{Meshtastic firmware}\\phone API · mesh router};
+\node[rblk, draw=lorablue] (rL) at (12.4,-1.45)
+  {\textbf{LoRa transceiver}\\SX1276 (SX1262 on other boards)};
+\node[align=left, anchor=south west, text=white] (rT) at ($(rS.north west)+(-0.05,0.18)$)
+  {\textbf{pbx radio}\\[-1pt]\radiosub{LILYGO T-Beam · ESP32}};
+\draw[flow, draw=white] (rS) -- (rA);
+\draw[flow, draw=white] (rA) -- (rL);
+\begin{scope}[on background layer]
+  \node[draw=mtgreen, very thick, fill=mtdark, rounded corners=3pt,
+        fit=(rT)(rS)(rL), inner xsep=8pt, inner ysep=10pt] (Rad) {};
+\end{scope}
+\node[draw=mtgreen6, dashed, thick, rounded corners=3pt, fit=(rA)(rL), inner sep=4pt] (memb) {};
+
+% ── The connector: a UART between them ────────────────────────────────────────
+\draw[conn, line width=1.6pt] (M.east |- mU) -- (Rad.west |- rS)
+  node[midway, above, note, text=amber!75!black] {UART · 115200 8N1}
+  node[midway, below, note, text=amber!75!black, align=center]
+    {Stream API frames\\0x94 0xC3 · length · payload};
+
+% ── Antenna and the mesh ──────────────────────────────────────────────────────
+\coordinate (ant) at ($(Rad.east |- rL)+(0.65,0)$);
+\draw[very thick, draw=mtdark] (rL.east) -- (ant) -- ++(0,0.95) coordinate (top);
+\draw[very thick, draw=mtdark, fill=mtdark] ($(top)+(-0.22,0.35)$) -- ($(top)+(0.22,0.35)$) -- (top) -- cycle;
+\foreach \r in {0.35,0.6,0.85}
+  \draw[lorablue, thick] ($(top)+(0,0.2)+({\r*cos(-40)},{\r*sin(-40)})$)
+    arc[start angle=-40, end angle=40, radius=\r];
+
+\begin{scope}[shift={(18.7,-0.15)}]
+  \node[draw=lorablue, dashed, thick, fill=lorablue!5, ellipse,
+        minimum width=44mm, minimum height=34mm] (mesh) {};
+  \node[radio, minimum width=13mm, minimum height=6mm, inner sep=1pt, font=\scriptsize]
+    (o1) at (-0.95, 0.55) {node};
+  \node[radio, minimum width=13mm, minimum height=6mm, inner sep=1pt, font=\scriptsize]
+    (o2) at (0.95, 0.75) {node};
+  \node[radio, minimum width=13mm, minimum height=6mm, inner sep=1pt, font=\scriptsize]
+    (o3) at (-0.7,-0.75) {receiver};
+  \node[radio, minimum width=13mm, minimum height=6mm, inner sep=1pt, font=\scriptsize]
+    (o4) at (1.0,-0.6) {gateway};
+  \draw[air] (o1) -- (o2);
+  \draw[air] (o1) -- (o3);
+  \draw[air] (o2) -- (o4);
+  \draw[air] (o3) -- (o4);
+  \node[note, text=lorablue!80!black, above=1mm of mesh] {LoRa mesh};
+\end{scope}
+\draw[air] ($(top)+(1.05,0.2)$) -- (o1.west);
+
+% ── Who configures what ───────────────────────────────────────────────────────
+\node[pbx, minimum width=40mm] (PJ) at (8.4, 4.8)
+  {\textbf{PBX project (meshpbx)}\\[-1pt]{\scriptsize builds the module · configures the connector}};
+\draw[->, very thick, draw=amber] (PJ.west) -| node[pos=0.25, above, note, text=amber!75!black]
+  {firmware} (M.north);
+\draw[->, very thick, draw=amber] (PJ.east) -| node[pos=0.25, above, note, text=amber!75!black]
+  {connector settings} ($(rS.north)+(1.3,0)$);
+
+\node[platform, minimum width=36mm] (PL) at (12.4,-4.5)
+  {\textbf{meshtastic-platform}\\[-1pt]{\scriptsize configure.py provision · inspect}};
+\node[platform, minimum width=30mm, left=16mm of PL] (F)
+  {\textbf{deployments/\textless name\textgreater.yaml}\\[-1pt]{\scriptsize the application}};
+\draw[->, thick, draw=mtgreen7] (F) -- node[above, note] {reads} (PL);
+\draw[member] (PL.north) -- node[right, note, text=mtgreen7, align=left, pos=0.45]
+  {\textbf{membership}\\region · preset · slot · channels + PSKs\\role · hop limit · tx\_power · cadences}
+  (memb.south);
+
+% ── Legend ────────────────────────────────────────────────────────────────────
+\begin{scope}[shift={(-0.6,-6.1)}, note]
+  \draw[conn] (0,0) -- ++(0.9,0)
+    node[right, align=left] {connector: configured by the PBX project};
+  \draw[member] (0,-0.5) -- ++(0.9,0)
+    node[right, align=left] {membership: configured by meshtastic-platform from the deployment file};
+  \draw[air] (8.6,0) -- ++(0.9,0) node[right] {LoRa};
+  \draw[densely dotted, thick, draw=mtdark!50] (8.6,-0.5) -- ++(0.9,0) node[right] {BLE};
+\end{scope}
+
+\end{tikzpicture}
+\end{document}

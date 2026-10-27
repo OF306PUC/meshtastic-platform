@@ -1,0 +1,28 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false          # external/ is not needed to test this code
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Dependencies (the repository itself is not installed)
+        run: pip install -r requirements.txt
+      - name: Unit tests (unittest; includes the hard rules in tests/test_hard_rules.py)
+        run: python -m unittest discover -s tests -t .
+      - name: Every deployment file validates
+        run: python configure.py validate --all --quiet
+      - name: Dependency rule — the platform never mentions the pipeline
+        run: |
+          if grep -rniE "mqtt|influx|telegraf|paho|docker" meshtastic_platform/ channel_study/ configure.py receiver.py --include=*.py; then
+            echo "::error::the platform must not depend on, or mention, the gateway's infrastructure"
+            exit 1
+          fi

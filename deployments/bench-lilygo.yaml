@@ -1,0 +1,169 @@
+# deployments/bench-lilygo.yaml — the 6-node LILYGO lab bench.
+#
+# An ALTERNATIVE to the field deployment, never simultaneous: run one or the
+# other in a mesh, never both. --deployment is mandatory precisely so that a
+# session always says which one it was.
+#
+# The bench does not measure propagation. It measures MESH BEHAVIOUR —
+# topology, relaying, collision, PDR, occupancy — and its RSSI/SNR do not
+# transfer to the field. The value of the bench is that here you CAN break
+# things on purpose: saturate the channel, force chains with ignore_incoming,
+# rotate hop_limit (experiments E1, E5, E6, E7).
+#
+# Power: every radio at the LOWEST power the chip allows. The T-Beams carry an
+# SX1276: on its PA_BOOST output RadioLib accepts 2..17 dBm (and 20); below
+# 2 dBm it switches to the RFO output, whose routing to the antenna on the
+# T-Beam is not verified — so the bench runs at 2 dBm. Six radios at field power
+# on a desk saturate each other's front ends (meaningless RSSI) and radiate into
+# the neighbourhood; if they still saturate at 2 dBm, use attenuators or loads.
+# The validator REJECTS this file if any node carries another power.
+
+meta:
+  deployment: bench-lilygo
+  kind: bench
+  description: CPS-RTC lab mesh bench, 6 x LILYGO (+1 receiver as the sink)
+  firmware_target: "2.7.26"      # same as the field: firmware is held identical across what is compared
+  # E6 (where is the load knee?): set 4 or 12. Every cadence below is divided by
+  # it, in one place, for provisioning AND for the estimators. At x12 the bench
+  # passes 50 % occupancy at hop_limit 2 — well above the ~25 % at which the
+  # firmware starts deferring transmissions. Never possible in the field.
+  cadence_scale: 1
+
+radio:
+  region: ANZ
+  modem_preset: MEDIUM_FAST      # same as the field it rehearses
+  # Team slot plan (ANZ): LONG_TURBO 14 = 921.750 MHz · LONG_FAST 20 = 919.875 MHz ·
+  # MEDIUM_FAST 45 = 926.125 MHz. Changing the preset means changing this too.
+  channel_num: 45                # same slot as rapa-nui AND san-joaquin (same campus):
+                                 # never on air while the campus testbed is
+  channels:                      # same names and keys on every radio of the mesh
+    - {index: 0, name: telCPS_RTC, psk_env: LORA_TELEMETRY_CHANNEL_PSK}
+    - {index: 1, name: msgPUC_NET, psk_env: LORA_MSG_CHANNEL_PSK}
+  rebroadcast_mode: LOCAL_ONLY
+  position_precision: 32         # full precision: the sender masks the rest away for good
+  rx_boosted_gain: true
+  # Chile, SUBTEL Res. Ex. 1.985/2017 (Norma Técnica de Equipos de Alcance
+  # Reducido), read as EIRP — the conservative reading of "potencia radiada".
+  eirp_caps:
+    - {band_mhz: [915, 928], eirp_dbm: 27, label: "SUBTEL j.3"}
+    - {band_mhz: [913, 919], eirp_dbm: 30, label: "SUBTEL j.4"}
+    - {band_mhz: [925, 928], eirp_dbm: 30, label: "SUBTEL j.4"}
+
+# The LILYGO carry no sensor, so 2 flows each (device + position), not 3.
+# Caveat: indoors without a GPS fix a LILYGO sends no position packets; if
+# that is the case on the bench, drop `position` from intervals (V3) rather
+# than measure a flow that cannot arrive.
+nodes:
+  - ref: B1
+    function: node
+    status: planned
+    node_id: null
+    mac: null
+    hardware: lilygo_tbeam_sx1276
+    mcu: esp32
+    firmware: null
+    role: CLIENT
+    hop_limit: 1                 # E5 rotates 1 / 2 / 3
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: null, model: LILYGO stock whip}
+    tx_power_dbm: 2
+    site: {name: CPS-RTC lab bench}
+    intervals: {device: 120, position: 600}
+    sensors: []
+
+  - ref: B2
+    function: node
+    status: planned
+    node_id: null
+    mac: null
+    hardware: lilygo_tbeam_sx1276
+    mcu: esp32
+    firmware: null
+    role: CLIENT
+    hop_limit: 1
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: null, model: LILYGO stock whip}
+    tx_power_dbm: 2
+    site: {name: CPS-RTC lab bench}
+    intervals: {device: 120, position: 600}
+    sensors: []
+
+  - ref: B3
+    function: node
+    status: planned
+    node_id: null
+    mac: null
+    hardware: lilygo_tbeam_sx1276
+    mcu: esp32
+    firmware: null
+    role: CLIENT
+    hop_limit: 1
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: null, model: LILYGO stock whip}
+    tx_power_dbm: 2
+    site: {name: CPS-RTC lab bench}
+    intervals: {device: 120, position: 600}
+    sensors: []
+
+  - ref: B4
+    function: node
+    status: planned
+    node_id: null
+    mac: null
+    hardware: lilygo_tbeam_sx1276
+    mcu: esp32
+    firmware: null
+    role: CLIENT
+    hop_limit: 1
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: null, model: LILYGO stock whip}
+    tx_power_dbm: 2
+    site: {name: CPS-RTC lab bench}
+    intervals: {device: 120, position: 600}
+    sensors: []
+
+  - ref: B5
+    function: node
+    status: planned
+    node_id: null
+    mac: null
+    hardware: lilygo_tbeam_sx1276
+    mcu: esp32
+    firmware: null
+    role: CLIENT
+    hop_limit: 1
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: null, model: LILYGO stock whip}
+    tx_power_dbm: 2
+    site: {name: CPS-RTC lab bench}
+    intervals: {device: 120, position: 600}
+    sensors: []
+
+  - ref: B6
+    function: node
+    status: planned
+    node_id: null
+    mac: null
+    hardware: lilygo_tbeam_sx1276
+    mcu: esp32
+    firmware: null
+    role: CLIENT
+    hop_limit: 1
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: null, model: LILYGO stock whip}
+    tx_power_dbm: 2
+    site: {name: CPS-RTC lab bench}
+    intervals: {device: 120, position: 600}
+    sensors: []
+
+  # The bench's sink: one of the two portable receivers, on a laptop running
+  # `python receiver.py`. GPS off on the desk: no position flow.
+  - ref: R1
+    function: receiver
+    status: planned
+    node_id: null
+    mac: null
+    hardware: lilygo_tbeam_sx1276
+    mcu: esp32
+    firmware: null
+    role: CLIENT_MUTE
+    hop_limit: 1
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: null, model: LILYGO stock whip}
+    tx_power_dbm: 2
+    site: {name: CPS-RTC lab bench}
+    intervals: {}
+    sensors: []

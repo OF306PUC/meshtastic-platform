@@ -1,0 +1,22 @@
+# Dependencies to run configure.py, receiver.py and the tests from a clone:
+#
+#   python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+#
+# The repository itself is NOT installed: the scripts at its root import the
+# meshtastic_platform/ and channel_study/ folders directly.
+#
+# Only direct imports are listed. Transitive dependencies are left to the
+# resolver on purpose: hand-pinning meshtastic's own tree (dbus-fast, bleak...)
+# broke installs on platforms with no matching wheel.
+
+# The Meshtastic CLI and Python API. The [cli] extra is what provides a working
+# `meshtastic` command, which the provisioning steps drive.
+meshtastic[cli]==2.7.8
+pyyaml>=6.0          # deployment registries
+
+# ── Figures and offline analysis (channel_study/analysis) ─────────────────────
+# The expensive half: numpy, pillow and fonttools compile from source where no
+# wheel exists. Comment these out on a field laptop that only records.
+matplotlib>=3.6
+pandas>=2.0
+numpy>=1.24

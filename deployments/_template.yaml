@@ -1,0 +1,140 @@
+# deployments/_template.yaml — a starting point for a new deployment.
+#
+# Copy it to deployments/<name>.yaml (the name must match meta.deployment),
+# fill it in, and check it with:
+#     python configure.py validate -d <name>
+# Files starting with "_" are not deployments: tools never list or load them.
+#
+# Everything about a mesh lives in its deployment file — radio settings,
+# nodes, sites, cadences. The code holds none of it.
+
+meta:
+  deployment: my-mesh            # = the file name, without .yaml
+  kind: field                    # field | bench | historical
+                                 #   field:      real sites; tx_power derived from eirp_caps
+                                 #   bench:      lab mesh; every radio at its chip's minimum power
+                                 #   historical: a past mesh, kept to re-read its data
+  description: what this mesh is for
+  firmware_target: "2.7.26"      # the firmware every radio must run (quoted)
+  # cadence_scale: 1             # bench only: divide every cadence by this (load tests)
+
+radio:
+  region: ANZ                    # Meshtastic region
+  modem_preset: MEDIUM_FAST      # Meshtastic modem preset
+  channel_num: 45                # frequency slot (1-based); explicit, or the firmware hashes the channel name
+  channels:                      # the first one is the primary (index 0)
+    - {index: 0, name: myPrimary, psk_env: MY_PRIMARY_CHANNEL_PSK}   # key read from .env
+    - {index: 1, name: mySecondary, psk_env: MY_SECONDARY_CHANNEL_PSK}
+  rebroadcast_mode: LOCAL_ONLY   # ALL | ALL_SKIP_DECODING | LOCAL_ONLY | KNOWN_ONLY | NONE | CORE_PORTNUMS_ONLY
+  position_precision: 32         # bits of lat/lon kept when a position is sent (32 = full)
+  rx_boosted_gain: true          # SX126x only; ignored on other chips
+  # Radiated-power caps (EIRP) that apply where the mesh operates. The most
+  # permissive band containing the whole channel applies. [] if none apply.
+  eirp_caps:
+    - {band_mhz: [915, 928], eirp_dbm: 27, label: "rule A"}
+    - {band_mhz: [925, 928], eirp_dbm: 30, label: "rule B"}
+
+nodes:
+  # ── A node: emits measured flows ─────────────────────────────────────────────
+  - ref: N1                      # short name used everywhere (terminal, CSV files)
+    # label: node-1              # optional: a different published name
+    function: node               # node | pbx | gateway | receiver
+    status: planned              # planned | deployed | fault | retired
+    node_id: null                # "!xxxxxxxx" — from `python configure.py inspect`
+    mac: null                    # "AA:BB:CC:DD:EE:FF" — from the inspector
+    hardware: sensecap_solar_node_p1_pro   # see meshtastic_platform/registry/hardware.py
+    mcu: nrf52840                # nrf52840 | esp32 — must agree with hardware
+    firmware: null               # MEASURED version, X.Y.Z (quoted) — from the inspector
+    role: CLIENT                 # Meshtastic device role
+    hop_limit: 1
+    antenna:
+      type: rubber               # free text: groups the analysis
+      gain_dbi: 2.0
+      band_mhz: [902, 928]       # optional: warns if it does not cover the channel
+      model: null
+      connector_loss_db: null    # measured; null = not measured
+    tx_power_dbm: 22             # DERIVED — `python configure.py show` prints the value to use
+    site:                        # filled in ON SITE
+      name: null
+      asset_code: null
+      surveyed: {lat: null, lon: null, alt_m: null, alt_source: null}   # GPS read at the site
+      antenna_height_m: null
+      mount: null
+    intervals:                   # seconds; ONLY the flows the node really sends
+      device: 120
+      environment: 120           # only with an environment sensor below
+      position: 600
+    sensors:                     # [] for none
+      - {type: SHT4X, i2c_addr: "0x44", port: grove}
+    notes: null
+
+  # ── A pbx radio: driven over UART by a PBX that multiplexes phones onto it ────
+  - ref: P1
+    function: pbx
+    status: planned
+    node_id: null
+    mac: null
+    hardware: lilygo_tbeam_sx1276   # the radio on the mesh
+    mcu: esp32
+    firmware: null
+    role: CLIENT                 # it carries its users' messages
+    hop_limit: 2
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: null, model: null}
+    tx_power_dbm: 20
+    pbx:                         # which PBX drives it (a record; its link to the
+                                 # radio is configured by the PBX project)
+      mcu: nrf54l15              # registry/hardware.py PBX_MCUS
+      firmware: null             # PBX firmware version, quoted once known
+    site:
+      name: null
+      asset_code: null
+      surveyed: {lat: null, lon: null, alt_m: null, alt_source: null}
+      antenna_height_m: null
+      mount: null
+    intervals:
+      device: 900
+    sensors: []
+
+  # ── A gateway radio: listen-only sink on a host computer ─────────────────────
+  - ref: GW
+    function: gateway
+    status: planned
+    node_id: null
+    mac: null
+    hardware: lilygo_tbeam_sx1276
+    mcu: esp32
+    firmware: null
+    role: CLIENT_MUTE            # gateways and receivers never relay
+    hop_limit: 1
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: null, model: null}
+    tx_power_dbm: 20
+    site:
+      name: null
+      asset_code: null
+      surveyed: {lat: null, lon: null, alt_m: null, alt_source: null}
+      antenna_height_m: null
+      mount: null
+    intervals: {}                # broadcasts no measured flow
+    sensors: []
+
+  # ── A receiver: a radio on a PC running receiver.py ──────────────────────────
+  - ref: R1
+    function: receiver
+    status: planned
+    node_id: null
+    mac: null
+    hardware: lilygo_tbeam_sx1276
+    mcu: esp32
+    firmware: null
+    role: CLIENT_MUTE
+    hop_limit: 1
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: null, model: null}
+    tx_power_dbm: 20
+    site:
+      name: null
+      asset_code: null
+      surveyed: {lat: null, lon: null, alt_m: null, alt_source: null}
+      antenna_height_m: null
+      mount: null
+    intervals: {}                # add `position: 30` to log its GPS track while walking
+    sensors: []

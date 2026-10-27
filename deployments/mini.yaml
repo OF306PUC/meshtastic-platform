@@ -1,0 +1,108 @@
+# deployments/mini.yaml — a minimal mesh: three nodes and a receiver.
+#
+# For trying the platform end to end: provision the three nodes, record what the
+# inspector reads from each, and watch them with the channel-study receiver.
+#
+#   1. Set MINI_PSK in .env (once, then the same on every radio):
+#        openssl rand -base64 32        -> MINI_PSK=base64:<that>
+#   2. python configure.py validate -d mini
+#   3. Per radio, over USB (N1, N2, N3, R1):
+#        python configure.py provision -d mini --node N1 --port /dev/serial/by-id/...
+#        python configure.py inspect   -d mini --node N1 --port /dev/serial/by-id/...
+#      Copy the node_id, mac and firmware the inspector prints into the entry.
+#      A node without node_id is not expected by the receiver: it shows up as
+#      an unknown sender and its silences are not reported.
+#   4. python receiver.py -d mini --port /dev/serial/by-id/<R1>
+#
+# Radios on a desk: switch to `kind: bench` and set every tx_power_dbm to its
+# chip minimum (-9 on the SenseCAP, 2 on the T-Beam), or they saturate each
+# other at centimetres. A bench needs no eirp_caps.
+#
+# `hardware` must name the radios actually used: provisioning refuses a device
+# whose MCU or model does not match its entry.
+
+meta:
+  deployment: mini
+  kind: field
+  description: minimal mesh for end-to-end tests — three nodes and a receiver
+  firmware_target: "2.7.26"
+
+radio:
+  region: ANZ
+  modem_preset: MEDIUM_FAST
+  # Team slot plan (ANZ): LONG_TURBO 14 · LONG_FAST 20 · MEDIUM_FAST 45. The
+  # other deployments use 45 too: with a different channel name and key they
+  # cannot read each other, but they do share the airtime.
+  channel_num: 45
+  channels:
+    - {index: 0, name: miniT, psk_env: MINI_PSK}
+  rebroadcast_mode: LOCAL_ONLY
+  position_precision: 32
+  rx_boosted_gain: true
+  # Chile, SUBTEL Res. Ex. 1.985/2017, read as EIRP.
+  eirp_caps:
+    - {band_mhz: [915, 928], eirp_dbm: 27, label: "SUBTEL j.3"}
+    - {band_mhz: [913, 919], eirp_dbm: 30, label: "SUBTEL j.4"}
+    - {band_mhz: [925, 928], eirp_dbm: 30, label: "SUBTEL j.4"}
+
+nodes:
+  - ref: N1
+    function: node
+    status: planned
+    node_id: null
+    mac: null
+    hardware: sensecap_solar_node_p1_pro
+    mcu: nrf52840
+    firmware: null
+    role: CLIENT
+    hop_limit: 1
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: [902, 928], model: SenseCAP stock}
+    tx_power_dbm: 22
+    intervals: {device: 120}
+    sensors: []
+
+  - ref: N2
+    function: node
+    status: planned
+    node_id: null
+    mac: null
+    hardware: sensecap_solar_node_p1_pro
+    mcu: nrf52840
+    firmware: null
+    role: CLIENT
+    hop_limit: 1
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: [902, 928], model: SenseCAP stock}
+    tx_power_dbm: 22
+    intervals: {device: 120}
+    sensors: []
+
+  - ref: N3
+    function: node
+    status: planned
+    node_id: null
+    mac: null
+    hardware: sensecap_solar_node_p1_pro
+    mcu: nrf52840
+    firmware: null
+    role: CLIENT
+    hop_limit: 1
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: [902, 928], model: SenseCAP stock}
+    tx_power_dbm: 22
+    intervals: {device: 120}
+    sensors: []
+
+  # The receiver: a LILYGO on the laptop running receiver.py. Listens only.
+  - ref: R1
+    function: receiver
+    status: planned
+    node_id: null
+    mac: null
+    hardware: lilygo_tbeam_sx1276
+    mcu: esp32
+    firmware: null
+    role: CLIENT_MUTE
+    hop_limit: 1
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: null, model: LILYGO stock}
+    tx_power_dbm: 20
+    intervals: {}
+    sensors: []

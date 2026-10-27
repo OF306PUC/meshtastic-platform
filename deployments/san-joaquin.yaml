@@ -1,0 +1,172 @@
+# deployments/san-joaquin.yaml — the San Joaquín campus testbed (live).
+#
+# This registry is the TARGET configuration, which provisioning applies and the
+# inspector checks against. Until each radio is reprovisioned, the inspector
+# reports it as drifted (preset, slot, tx_power, roles) — that is the list of
+# radios still to do.
+#
+# State before reprovisioning (what the data recorded so far was taken under):
+#   * modem_preset LONG_TURBO. The slot plan's LONG_TURBO slot is 14 =
+#     921.75 MHz; radios set up before the plan existed sit on the firmware's
+#     hash slot 17 = 923.25 MHz — `python configure.py inspect` shows which;
+#   * tx_power never set: the radios reported 30 dBm and transmitted their chip
+#     ceiling (22 on the SenseCAP);
+#   * roles: node 1 CLIENT_BASE, node 3 CLIENT (swapped below, plan §2.6).
+# Analyse that data with `--preset LONG_TURBO` on the analysis scripts.
+#
+# p1 and p2 are pbx radios: a LILYGO T-Beam driven over its UART1 by an
+# nRF52840 DK running the PBX firmware. This file gives them their membership
+# in the mesh; their link to the PBX is configured by the PBX project. They are
+# installed, but stay `planned` here until the firmware of both the radio and
+# the PBX is read and recorded (`python configure.py inspect`; the PBX version
+# from its build).
+#
+# Labels keep the names the data was published under ("node-1"), so old and
+# new series still join.
+
+meta:
+  deployment: san-joaquin
+  kind: field
+  description: San Joaquín campus testbed, Pontificia Universidad Católica de Chile (CPS-RTC)
+  firmware_target: "2.7.26"      # nodes 1-3 run 2.7.26 (commit 54e0d8d)
+
+radio:
+  region: ANZ
+  modem_preset: MEDIUM_FAST
+  # Team slot plan (ANZ): LONG_TURBO 14 = 921.750 MHz · LONG_FAST 20 = 919.875 MHz ·
+  # MEDIUM_FAST 45 = 926.125 MHz. Changing the preset means changing this too.
+  channel_num: 45                # the lab bench uses it too, on the same campus:
+                                 # never both on air at once
+  channels:                      # same names and keys on every radio of the mesh
+    - {index: 0, name: telCPS_RTC, psk_env: LORA_TELEMETRY_CHANNEL_PSK}
+    - {index: 1, name: msgPUC_NET, psk_env: LORA_MSG_CHANNEL_PSK}
+  rebroadcast_mode: LOCAL_ONLY
+  position_precision: 32         # full precision: the sender masks the rest away for good
+  rx_boosted_gain: true
+  # Chile, SUBTEL Res. Ex. 1.985/2017 (Norma Técnica de Equipos de Alcance
+  # Reducido), read as EIRP — the conservative reading of "potencia radiada".
+  eirp_caps:
+    - {band_mhz: [915, 928], eirp_dbm: 27, label: "SUBTEL j.3"}
+    - {band_mhz: [913, 919], eirp_dbm: 30, label: "SUBTEL j.4"}
+    - {band_mhz: [925, 928], eirp_dbm: 30, label: "SUBTEL j.4"}
+
+nodes:
+  - ref: "1"
+    label: node-1
+    function: node
+    status: deployed
+    node_id: "!0b64122b"
+    hardware: sensecap_solar_node_p1_pro
+    mcu: nrf52840
+    firmware: "2.7.26"
+    role: CLIENT                 # was CLIENT_BASE; the role belongs on the high, far node (plan §2.6)
+    hop_limit: 2
+    antenna:                     # SenseCAP stock rubber antenna — confirm none was replaced
+      type: rubber
+      gain_dbi: 2.0
+      band_mhz: [902, 928]
+      model: SenseCAP stock
+    tx_power_dbm: 22
+    site:
+      # alt: mesh_config.json carried 0 for every node — a placeholder, not a survey.
+      surveyed: {lat: -33.4969028, lon: -70.6101277778, alt_m: null}
+    intervals: {device: 120, environment: 120, position: 600}
+    sensors:
+      - {type: SHT4X, i2c_addr: "0x44", port: grove}
+
+  - ref: "2"
+    label: node-2
+    function: node
+    status: deployed
+    node_id: "!7c70da02"
+    hardware: sensecap_solar_node_p1_pro
+    mcu: nrf52840
+    firmware: "2.7.26"
+    role: CLIENT
+    hop_limit: 2
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: [902, 928], model: SenseCAP stock}
+    tx_power_dbm: 22
+    site:
+      surveyed: {lat: -33.4971361, lon: -70.6075444443, alt_m: null}
+    intervals: {device: 120, environment: 120, position: 600}
+    sensors:
+      - {type: SHT4X, i2c_addr: "0x44", port: grove}
+
+  - ref: "3"
+    label: node-3
+    function: node
+    status: deployed
+    node_id: "!32fe0d4e"
+    hardware: sensecap_solar_node_p1_pro
+    mcu: nrf52840
+    firmware: "2.7.26"
+    role: CLIENT_BASE            # was CLIENT (plan §2.6)
+    hop_limit: 2
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: [902, 928], model: SenseCAP stock}
+    tx_power_dbm: 22
+    site:
+      surveyed: {lat: -33.5002389, lon: -70.6119222222, alt_m: null}
+    intervals: {device: 120, environment: 120, position: 600}
+    sensors:
+      - {type: SHT4X, i2c_addr: "0x44", port: grove}
+
+  # PBX radios. Per the 2026-09-02 analysis they never delivered a position
+  # packet against their declared 1800 s cadence: the receiver will report that
+  # flow as silent until the GPS gets a fix, or until `position` is removed.
+  - ref: p1
+    label: node-p1
+    function: pbx
+    status: planned              # installed; firmware not yet recorded
+    node_id: "!bb8106c4"
+    hardware: lilygo_tbeam_sx1276
+    mcu: esp32
+    firmware: null
+    role: CLIENT
+    hop_limit: 2
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: null, model: LILYGO stock}   # assumed stock: confirm
+    tx_power_dbm: 20             # SX1276: the chip ceiling (RF95_MAX_POWER) binds
+    pbx:
+      mcu: nrf52840              # nRF52840 DK prototype
+      firmware: null
+    site:
+      name: MIDE
+      surveyed: {lat: -33.4969028, lon: -70.610127778, alt_m: null}
+    intervals: {device: 600, position: 1800}
+    sensors: []
+
+  - ref: p2
+    label: node-p2
+    function: pbx
+    status: planned              # installed; firmware not yet recorded
+    node_id: "!6c743130"
+    hardware: lilygo_tbeam_sx1276
+    mcu: esp32
+    firmware: null
+    role: CLIENT
+    hop_limit: 2
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: null, model: LILYGO stock}   # assumed stock: confirm
+    tx_power_dbm: 20
+    pbx:
+      mcu: nrf52840
+      firmware: null
+    site:
+      name: DIE
+      surveyed: {lat: -33.4999417, lon: -70.614008333, alt_m: null}
+    intervals: {device: 600, position: 1800}
+    sensors: []
+
+  # The gateway: a LILYGO T-Beam on USB to a Raspberry Pi (5G HAT under study).
+  # Its node_id was never recorded — read it with the inspector.
+  - ref: gw
+    function: gateway
+    status: planned
+    node_id: null
+    hardware: lilygo_tbeam_sx1276
+    mcu: esp32
+    firmware: null
+    role: CLIENT_MUTE
+    hop_limit: 2
+    antenna: {type: rubber, gain_dbi: 2.0, band_mhz: null, model: LILYGO stock}
+    tx_power_dbm: 20             # SX1276: the chip ceiling (RF95_MAX_POWER) binds
+    intervals: {}
+    sensors: []

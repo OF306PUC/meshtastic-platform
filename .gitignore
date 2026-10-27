@@ -1,0 +1,36 @@
+# Secrets: channel PSKs live only in .env (I8)
+.env
+psks.txt
+
+# Python
+.venv/
+__pycache__/
+*.egg-info/
+build/
+dist/
+
+# Channel-study output: recorded sessions and their figures stay out of git.
+# Archive them where the data lives, with their session.json.
+runs/
+field-testing-data/
+
+# Characterisation reports of one application (its methodology and analysis):
+# kept locally, not part of the platform.
+report/
+
+# Device console captures and exports: phone numbers, message content, private keys
+captures/
+*.export.yaml
+
+# Scratch
+.tmp/
+tmp/
+
+# Agents — same convention as meshtastic-testbed-platform. NOTE: the refactor
+# guide (§9.4) plans skills under .claude/skills/; un-ignore that path when the
+# first skill is installed if skills are to be versioned.
+.claude/
+CLAUDE.md
+
+# Editor
+.vscode/
