@@ -5,6 +5,7 @@ from unittest import mock
 
 from meshtastic_platform.cli import meshtastic_cli
 from meshtastic_platform.provision import identity, plan
+from meshtastic_platform.provision import node as node_prov
 from meshtastic_platform.provision.identity import DeviceIdentity
 from meshtastic_platform.registry import parse
 from tests.test_registry import bench, field_registry, pbx_radio
@@ -225,6 +226,33 @@ class TestMeshtasticCli(unittest.TestCase):
                                                display="meshtastic --ch-set psk <psk>"))
         printed = " ".join(str(c) for c in out.call_args_list)
         self.assertNotIn("SECRET", printed)
+
+    def test_an_enum_read_back_as_a_number_is_not_a_failure(self):
+        """`meshtastic --get` prints an enum as its protobuf int, not its name.
+
+        Comparing the name against that output reported every provisioned node
+        as having lost device.rebroadcast_mode, which it had not.
+        """
+        from meshtastic.protobuf import config_pb2
+        mode = config_pb2.Config.DeviceConfig.RebroadcastMode
+        self.assertEqual(mode.Value("LOCAL_ONLY"), 2)
+        self.assertTrue(meshtastic_cli.reads_as("2", "LOCAL_ONLY", mode))
+        self.assertTrue(meshtastic_cli.reads_as("LOCAL_ONLY", "LOCAL_ONLY", mode))
+        # A different mode, an unreadable value, or no enum to resolve: no match.
+        self.assertFalse(meshtastic_cli.reads_as("0", "LOCAL_ONLY", mode))
+        self.assertFalse(meshtastic_cli.reads_as("", "LOCAL_ONLY", mode))
+        self.assertFalse(meshtastic_cli.reads_as("2", "LOCAL_ONLY", None))
+
+    def test_execute_accepts_the_numeric_read_back(self):
+        """The whole path: a radio that answers '2' provisions without failures."""
+        steps = [plan.Step("device role + rebroadcast_mode",
+                           ["meshtastic", "--set", "device.role", "CLIENT"])]
+        with mock.patch.object(meshtastic_cli, "run", return_value=True), \
+                mock.patch.object(node_prov, "get_config_value", return_value="2"), \
+                mock.patch.object(node_prov, "run", return_value=True), \
+                mock.patch("builtins.print"):
+            failures = node_prov.execute(steps, rebroadcast_mode="LOCAL_ONLY")
+        self.assertEqual(failures, [])
 
 
 if __name__ == "__main__":

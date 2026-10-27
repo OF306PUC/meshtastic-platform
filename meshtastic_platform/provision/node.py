@@ -15,8 +15,19 @@ radio was told, not what it does.
 """
 from __future__ import annotations
 
-from meshtastic_platform.cli.meshtastic_cli import SETTLE_DELAY, get_config_value, run
+from meshtastic_platform.cli.meshtastic_cli import (
+    SETTLE_DELAY, get_config_value, reads_as, run,
+)
 from meshtastic_platform.provision.plan import Step
+
+
+def _rebroadcast_enum():
+    """Config.DeviceConfig.RebroadcastMode, or None if the library moved it."""
+    try:
+        from meshtastic.protobuf import config_pb2
+        return config_pb2.Config.DeviceConfig.RebroadcastMode
+    except Exception:
+        return None
 
 
 def execute(steps: list[Step], *, rebroadcast_mode: str | None = None,
@@ -29,7 +40,7 @@ def execute(steps: list[Step], *, rebroadcast_mode: str | None = None,
         if rebroadcast_mode and step.label.startswith("device role"):
             argv = ["meshtastic"] + (["--port", port] if port else [])
             actual = get_config_value(argv, "device.rebroadcast_mode")
-            if rebroadcast_mode.lower() not in actual.lower():
+            if not reads_as(actual, rebroadcast_mode, _rebroadcast_enum()):
                 print(f"WARNING: device.rebroadcast_mode did not persist "
                       f"(expected {rebroadcast_mode}, read '{actual or 'unknown'}').")
                 failures.append("device.rebroadcast_mode (verify)")

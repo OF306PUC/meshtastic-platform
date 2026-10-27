@@ -20,6 +20,46 @@ Entry format:
 
 ---
 
+## 2026-10-27 — Falso positivo: "device.rebroadcast_mode did not persist"
+**Time:** 14:00 (aprox)
+**User request:** al configurar un nodo SenseCAP en Windows (`--port COM4`)
+apareció `WARNING: device.rebroadcast_mode did not persist (expected
+LOCAL_ONLY, read '2')`.
+
+### Actions taken
+- Verificado contra el protobuf: en `Config.DeviceConfig.RebroadcastMode`,
+  `LOCAL_ONLY` **es** el 2. El ajuste sí había quedado guardado.
+- Causa: `meshtastic --get` imprime los campos con `util.toStr`, y para un enum
+  eso es el entero crudo (`device.rebroadcast_mode: 2`). `node.execute`
+  comparaba el NOMBRE contra esa salida (`"local_only" not in "2"`), así que la
+  verificación fallaba **siempre**, en todos los nodos y sistemas operativos:
+  `provision` terminaba con "configuration completed with ERRORS" sin que
+  hubiera error. El docstring de `get_config_value` afirmaba que el CLI imprime
+  `LOCAL_ONLY`; era falso.
+- `meshtastic_cli.reads_as(actual, expected, enum_type)`: acepta el nombre o el
+  número, resolviendo el nombre con el enum del protobuf; sin enum o con valor
+  vacío no hay coincidencia (no se "arregla" aceptando cualquier cosa).
+- `node.execute` la usa con `Config.DeviceConfig.RebroadcastMode`.
+- Dos tests de regresión en `test_provision.py`: la tabla de equivalencias y el
+  camino completo de `execute` con una radio que responde `'2'`.
+
+### Decisions
+- No se tocó el inspector: lee por protobuf (`enum_name`), no por el CLI, así
+  que ya obtenía `LOCAL_ONLY`. Confirmado.
+- La comparación sigue siendo estricta ante un valor vacío o un modo distinto:
+  la verificación existe porque `rebroadcast_mode` se vio no persistir de
+  verdad cuando se fijaba junto a `device.role`.
+
+### Outcomes
+- 192 tests OK (190 + 2 nuevos); pyflakes limpio.
+- Los nodos configurados mientras aparecía esa advertencia están bien; se puede
+  confirmar con `configure.py inspect`.
+
+### Next steps / open questions
+- ¿Que `receiver.py` autodetecte el puerto como `inspect`? (pendiente anterior)
+
+---
+
 ## 2026-10-27 — Generación de claves portable (Windows)
 **Time:** 13:20 (aprox)
 **User request:** `openssl rand -base64 32` no funciona en Windows.

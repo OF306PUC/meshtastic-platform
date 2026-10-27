@@ -63,7 +63,31 @@ def get_config_value(argv_prefix, key):
     """
     result = subprocess.run(argv_prefix + ["--get", key], capture_output=True, text=True)
     for line in result.stdout.splitlines():
-        # The CLI prints lines like "device.rebroadcast_mode: LOCAL_ONLY".
+        # The CLI prints lines like "device.rebroadcast_mode: 2" (see
+        # reads_as() for why an enum comes back as a number).
         if key in line and ":" in line:
             return line.split(":", 1)[1].strip()
     return ""
+
+
+def reads_as(actual: str, expected: str, enum_type=None) -> bool:
+    """Does a value read with `--get` mean `expected`?
+
+    `meshtastic --get` prints a field through `util.toStr`, and for an enum
+    that is the raw protobuf int: `device.rebroadcast_mode: 2`, not
+    `LOCAL_ONLY`. Comparing the name against that output always fails, which
+    reports a setting that DID persist as lost — the opposite of useful. Both
+    spellings are accepted; pass `enum_type` (a protobuf EnumTypeWrapper) to
+    resolve the name.
+    """
+    actual = (actual or "").strip()
+    if not actual:
+        return False
+    if actual.casefold() == expected.casefold():
+        return True
+    if enum_type is None:
+        return False
+    try:
+        return actual == str(enum_type.Value(expected.upper()))
+    except Exception:          # not a name of this enum: no match, not a crash
+        return False
