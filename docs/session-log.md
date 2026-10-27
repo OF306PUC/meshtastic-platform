@@ -55,6 +55,21 @@ LOCAL_ONLY, read '2')`.
 - Los nodos configurados mientras aparecía esa advertencia están bien; se puede
   confirmar con `configure.py inspect`.
 
+- Segundo reporte del usuario, mismo nodo: el paso final `--reboot` terminó con
+  `Aborting due to WriteFile failed (PermissionError(13,'The device does not
+  recognize the command.',None,22))`. Es pyserial en Windows levantando el error
+  22 de Win32 (`ERROR_BAD_COMMAND`) al escribir en un COM cuyo dispositivo USB
+  ya desapareció — justo lo que hace una radio al reiniciarse. Los ajustes ya
+  estaban escritos: `--reboot` es el último paso del plan y no escribe ninguno.
+- `node.report()`: cuando el ÚNICO paso fallido es `reboot`, ya no dice "the
+  node may be partially configured" (era inexacto y mandaba a buscar un
+  problema inexistente); explica que todo se escribió antes y que se confirme
+  con `inspect`. Con cualquier otro fallo, el mensaje sigue igual. Sigue
+  saliendo con código 1: no se puede saber desde el mensaje si la radio
+  alcanzó a recibir el reboot.
+- Entrada nueva en troubleshooting: "The reboot step fails on Windows".
+- Test nuevo para los dos mensajes de `report()`.
+
 ### Next steps / open questions
 - ¿Que `receiver.py` autodetecte el puerto como `inspect`? (pendiente anterior)
 

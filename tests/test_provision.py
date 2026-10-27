@@ -243,6 +243,22 @@ class TestMeshtasticCli(unittest.TestCase):
         self.assertFalse(meshtastic_cli.reads_as("", "LOCAL_ONLY", mode))
         self.assertFalse(meshtastic_cli.reads_as("2", "LOCAL_ONLY", None))
 
+    def test_a_failed_reboot_is_not_a_half_configured_node(self):
+        """Reboot writes no setting: calling that "partially configured" sends
+        someone chasing a problem that is not there (Windows drops the USB
+        connection as the radio reboots)."""
+        import contextlib, io
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(node_prov.report(["reboot"], "N1"), 1)
+        self.assertIn("every setting was written", out.getvalue())
+        self.assertNotIn("partially configured", out.getvalue())
+
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            self.assertEqual(node_prov.report(["reboot", "telemetry"], "N1"), 1)
+        self.assertIn("partially configured", out.getvalue())
+
     def test_execute_accepts_the_numeric_read_back(self):
         """The whole path: a radio that answers '2' provisions without failures."""
         steps = [plan.Step("device role + rebroadcast_mode",

@@ -54,7 +54,16 @@ def report(failures: list[str], ref: str) -> int:
         print(f"\n=== {ref}: configuration completed with ERRORS ===")
         for label in failures:
             print(f"  FAILED: {label}")
-        print(f"{len(failures)} step(s) failed; the node may be partially configured.")
+        if failures == ["reboot"]:
+            # Reboot is the last step and writes no setting: everything else
+            # already went through. Saying "partially configured" here would
+            # send someone chasing a problem that is not there.
+            print("Only the final reboot failed: every setting was written before it. "
+                  "A radio that drops its USB connection as it reboots looks exactly "
+                  "like this. Power-cycle it if it did not come back, then run "
+                  "`python configure.py inspect` to confirm.")
+        else:
+            print(f"{len(failures)} step(s) failed; the node may be partially configured.")
         return 1
     print(f"\n=== {ref}: configuration completed ===")
     print("Next: `python configure.py inspect` against the same deployment, and read the "

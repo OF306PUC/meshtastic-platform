@@ -20,6 +20,7 @@ entries (broker credentials, containers, database timestamps) moved to
 | Sensor detected at `0x44`, no temperature or humidity | [I2C sensor detected but no telemetry](#i2c-sensor-detected-but-no-telemetry-sht4x) |
 | Every node reports the same coordinates | [Positions all identical](#positions-all-identical) |
 | Serial port busy, or the board reboots when you connect | [Serial port contention](#serial-port-contention) |
+| `WriteFile failed` / `Aborting due to` on the last step | [The reboot step fails on Windows](#the-reboot-step-fails-on-windows) |
 
 ---
 
@@ -235,6 +236,39 @@ Provisioning sets precision 32 on both channels of every device, receivers and
 gateway included — the mask is applied by the sender. **Already-stored
 positions cannot be recovered**; that is what the registry's `surveyed`
 positions are for.
+
+---
+
+## The reboot step fails on Windows
+
+**Symptom.** Provisioning runs through every setting, then the last step prints
+
+```
+Running: meshtastic --port COM4 --reboot
+Connected to radio
+Aborting due to WriteFile failed (PermissionError(13,'The device does not recognize the command.',None,22))
+```
+
+**The settings are written.** `--reboot` is the last step of the plan and writes
+no setting; everything before it already committed. `provision` says so when the
+reboot is the only failed step.
+
+What the message is: pyserial raising on a Win32 `WriteFile` that returned
+error 22 (`ERROR_BAD_COMMAND`). That is what writing to a `COM` port looks like
+once the USB device behind it has gone away — which is what a radio does when
+it reboots. The command and the reboot race each other, and on Windows the
+write loses.
+
+It cannot be told from the message alone whether the radio got the reboot
+command before it went away. The remedy is the same either way:
+
+```bash
+python configure.py inspect -d <name> --node <ref> --port COM4
+```
+
+If the radio answers and `inspect` exits 0, it rebooted and is configured. If
+it does not answer, power-cycle it (unplug the USB) and inspect again. Settings
+that only take effect after a reboot are applied by that power-cycle.
 
 ---
 
