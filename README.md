@@ -60,7 +60,8 @@ platform does not touch:
 sha256sum deployments/<name>.yaml external/meshtastic-gateway/deployments/<name>.yaml
 ```
 
-(The gateway's `deployments/` holds no file yet: copy the ones it will measure
+(On Windows, `Get-FileHash deployments\<name>.yaml` in PowerShell. The
+gateway's `deployments/` holds no file yet: copy the ones it will measure
 before its first run.)
 
 ## Deployments
@@ -97,8 +98,11 @@ Each radio has a `function`:
 
 Every command takes `-d/--deployment <name>`, where `<name>` is a file in
 `deployments/` without the `.yaml`: `-d my-mesh` reads
-`deployments/my-mesh.yaml`. A path to a YAML file elsewhere also works, and so
-does setting the `MESH_DEPLOYMENT` variable instead of passing `-d`. 
+`deployments/my-mesh.yaml`. A path to a YAML file elsewhere also works. The
+`MESH_DEPLOYMENT` variable replaces `-d` if you would rather not repeat it
+(`export MESH_DEPLOYMENT=my-mesh` in bash and zsh,
+`$env:MESH_DEPLOYMENT="my-mesh"` in PowerShell, `set MESH_DEPLOYMENT=my-mesh`
+in cmd). Nothing is ever defaulted: a command with neither stops.
 
 ```bash
 python configure.py validate -d my-mesh     # every rule the file must satisfy; --all checks them all
@@ -136,7 +140,7 @@ The decision, the PBX connection in detail and a worked example:
 | `lora.hop_limit` | node `hop_limit` | How many times a packet it sends may be relayed |
 | `lora.tx_power` | derived | See above |
 | `telemetry.*` | node `intervals`, `sensors` | Device telemetry (battery, voltage, channel use, airtime) and environment telemetry (only with a sensor), each at its cadence |
-| `position.*` | node `intervals.position` | GPS on and position broadcast at that cadence, or GPS off. Smart (movement-triggered) broadcast always off |
+| `position.*` | node `intervals.position` | GPS on and the position broadcast at that cadence, or GPS off with no flow declared. Always written off: smart (movement-triggered) broadcast, and `fixed_position`, which makes a radio report stored coordinates instead of its fix. The local fix interval follows mobility — 30 s on a receiver, one hour on anything bolted to a post — and costs no airtime |
 | `serial.enabled` | node `function` | Off on every radio except `pbx` ones, whose serial link and Bluetooth are never touched here |
 
 A position is never written to a radio: the surveyed site is a record in the
@@ -187,16 +191,23 @@ When something fails: [`docs/troubleshooting.md`](docs/troubleshooting.md).
 ## Channel study
 
 The receiver is a radio on a laptop, configured like any other node (a
-`receiver` entry in the file, role `CLIENT_MUTE`).
+`receiver` entry in the file, role `CLIENT_MUTE`). It only listens, so it can
+run on any machine the mesh reaches, for as long as you leave it there.
 
 ```bash
-export MESH_DEPLOYMENT=my-mesh
-python receiver.py --port <port>                                          # terminal only
-python receiver.py --port <port> --csv runs/2026-11-03/ --operator <name>
-python receiver.py --port <port> --node N1 --kind environment             # filter
-python receiver.py --port <port> --raw                                    # full packets
-python -m channel_study.analysis.plot_session runs/2026-11-03/            # figures (from the repo root)
+python receiver.py -d my-mesh --port <port>                                  # terminal only
+python receiver.py -d my-mesh --port <port> --csv runs/2026-11-03-hilltop/ --operator <name>
+python receiver.py -d my-mesh --port <port> --node N1 --kind environment     # filter
+python receiver.py -d my-mesh --port <port> --raw                            # full packets
+python receiver.py -d my-mesh --port <port> --csv runs/… --operator <name> --track-secs 60
+python -m channel_study.analysis.plot_session runs/2026-11-03-hilltop/            # figures
 ```
+
+Both commands run from the repository root, on Windows, Linux or macOS alike.
+The only argument that belongs to the machine you are sitting at is `--port`
+(see [The serial port](#the-serial-port)); the receiver always needs it, even
+with a single radio plugged in. Output directories are ordinary relative paths
+— forward slashes work on every OS — and are created if they do not exist.
 
 ```
 HH:MM:SS  ref   kind    hops  RSSI    SNR  payload
@@ -221,10 +232,37 @@ HH:MM:SS  ref   kind    hops  RSSI    SNR  payload
   packet). Each recording also writes `session.json`: who, when, which file
   (with its hash), the receiving radio's settings, the code version, and a
   summary.
+* Where the receiver was: while recording, it samples **its own GPS fix every
+  30 s** into `track.csv` (`--track-secs`; `0` turns it off), and
+  `plot_session` draws the route from it. The fix is read over the USB cable,
+  so it costs no airtime — but the GPS has to be on, and `provision` enables it
+  only when the receiver's entry declares a `position` flow. That flow is what
+  the radio puts ON AIR: declare it long (`position: 3600`) and keep
+  `--track-secs` short, and you get a dense route for one packet an hour in the
+  channel you are measuring. A sample identical to the previous fix — same
+  coordinates and same GPS timestamp, so nothing new arrived — is marked
+  `repeated`, never smoothed away; a receiver standing still with a live GPS is
+  not marked, because its timestamp keeps moving.
 
 The receiver warns at start-up if its radio is not on the file's preset and
-slot. `<port>` is the receiving radio's serial port — see
-[The serial port](#the-serial-port).
+slot, and again if the radio is not registered in the file at all (its antenna
+and firmware are part of every measurement, so the `rx_*` columns stay empty).
+
+### Recording from more than one machine
+
+Nothing is shared between machines: one receiving radio, one `receiver.py`, one
+`--operator` (or `MESH_OPERATOR`), one output directory. Give every run its own
+directory — a second receiver pointed at the same one overwrites its
+`session.json` — and name it after where it was recorded, because that is what
+tells two simultaneous recordings apart afterwards.
+
+Each run is self-describing, which is what makes separate machines comparable:
+`session.json` holds the run id, the operator, the receiving radio (port,
+`node_id`, board, firmware and its settings as read back), the deployment
+file's SHA-256, and this repository's `git describe`. Two machines measure the
+same mesh only if those agree — `channel_study.session.load_sessions()` refuses
+to pool sessions from different deployments or presets, and `plot_session`
+draws one session directory at a time.
 
 ## The decoder
 

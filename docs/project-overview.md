@@ -99,7 +99,7 @@ configure.py ─────────────┐            receiver.py �
 meshtastic_platform/                      channel_study/
   radio/     presets · regulatory · profile ◄── listener ─► Reception ─► sinks
   registry/  load + validate deployment files   (decode + clock + file facts)
-  decode/    packet dict → DecodedPacket   ◄─   gaps · summary · session.json
+  decode/    packet dict → DecodedPacket   ◄─   gaps · summary · session · track
   provision/ plan · preflight · inspector       analysis/ (plotstyle, figures)
   cli/       meshtastic CLI runner
 deployments/*.yaml   ── the application: the only place it lives; a copy of
@@ -121,6 +121,11 @@ numpy for the figures. Tests: `unittest`; lint: pyflakes. Diagrams: pdflatex.
   is the contract.
 * **Scripts, not an installed package** (user, 2026-10-26). No
   `pyproject.toml`, no sys.path tricks.
+* **Two cadences for the receiver's own position** (user, 2026-10-27): what the
+  radio puts on air is a declared `position` flow in the deployment file; how
+  often the laptop reads that radio's fix over USB is `--track-secs`, a property
+  of the recording machine. Reading costs no airtime, so a channel study can
+  trace its route without filling the channel it measures.
 * **Strict loader, no default deployment**: data analysed against the wrong
   file is silently wrong.
 * **A deployment file is the target configuration**; the inspector reports

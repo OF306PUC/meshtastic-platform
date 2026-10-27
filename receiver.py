@@ -17,6 +17,9 @@ be installed beyond requirements.txt:
     # Dump the full MeshPacket dict (debugging / new fields)
     python receiver.py --port /dev/ttyACM0 -d <deployment> --raw
 
+    # Walk a route: its own position into track.csv every 30 s, no airtime
+    python receiver.py --port /dev/ttyACM0 -d <deployment> --csv runs/<date>/ --operator <name> --track-secs 30
+
 <deployment> is a file in deployments/ without the .yaml, or a YAML path;
 -d/--deployment may come from MESH_DEPLOYMENT; it is never defaulted. The
 receiving radio must already be provisioned (python configure.py provision)
@@ -36,6 +39,7 @@ from channel_study.listener import KINDS, ChannelStudyReceiver
 from channel_study.session import SessionMeta, git_describe, iso, new_run_id
 from channel_study.sink.terminal import TerminalSink
 from channel_study.summary import Summary
+from channel_study.track import Tracker, own_position
 from meshtastic_platform.registry import ENV_DEPLOYMENT, RegistryError, available, load_deployment
 
 
@@ -59,6 +63,11 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--operator", default=os.environ.get("MESH_OPERATOR"),
                     help="who is recording (or MESH_OPERATOR); required with --csv/--jsonl")
     ap.add_argument("--notes", default="", help="free-form notes stored in session.json")
+    ap.add_argument("--track-secs", type=float, default=30.0, metavar="SECS",
+                    help="sample the receiving radio's own GPS every SECS into track.csv "
+                         "(0 = off). Read over USB, so it costs no airtime; it needs GPS "
+                         "enabled on that radio, which comes from its position flow in the "
+                         "deployment file. Only with --csv/--jsonl: it is written, not printed")
     ap.add_argument("--capture-content", action="store_true",
                     help="record message bodies (off by default: they may be real phone traffic)")
     ap.add_argument("--no-color", action="store_true")
@@ -119,12 +128,31 @@ def main(argv: list[str] | None = None) -> int:
         sinks.append(CsvSink(args.csv, run_id=run_id, clock=time.time))
     if args.jsonl:
         sinks.append(JsonlSink(args.jsonl, run_id=run_id, clock=time.time))
+
+    # The receiving radio's own position, read over USB. Only the sinks that
+    # write files take it: a track is for plotting afterwards, not for watching.
+    track_sinks = [s for s in sinks if hasattr(s, "track")]
+    tracker = Tracker(run_id=run_id, ref=rx_node.ref if rx_node else "self",
+                      interval_s=args.track_secs if track_sinks else 0.0)
+    if tracker.enabled:
+        gps = snap.get("position.gps_mode")
+        if str(gps) != "ENABLED":
+            term.message(f"[RX] WARNING: --track-secs is set but this radio's "
+                         f"position.gps_mode is {gps}: there is no fix to record. Declare a "
+                         f"position flow for {tracker.ref} in {reg.name} and re-provision, "
+                         f"or pass --track-secs 0")
+        term.message(f"[RX] own position every {tracker.interval:g} s -> track.csv "
+                     f"(read over USB: no airtime)")
+    elif args.track_secs > 0:
+        term.message("[RX] note: --track-secs needs --csv or --jsonl; a track has nowhere "
+                     "to go on the terminal")
     meta = SessionMeta(
         run_id=run_id, started_utc=iso(start), operator=args.operator or "",
         deployment=SessionMeta.deployment_block(reg),
         receiver={"port": args.port, "node_id": me.node_id, "ref": rx_node.ref if rx_node else None,
                   "registered": rx_node is not None, "hw_model": me.hw_model,
                   "firmware": me.firmware, "mac": me.mac, "config": snap.config,
+                  "position": snap.position,
                   "channels": [{k: v for k, v in ch.items() if k != "psk"} for ch in snap.channels]},
         git=git_describe(), notes=args.notes,
         filters={"node": args.node, "kind": args.kind},
@@ -142,6 +170,24 @@ def main(argv: list[str] | None = None) -> int:
         while True:
             time.sleep(1)
             rx.tick()
+            now = time.monotonic()
+            if tracker.due(now):
+                try:
+                    pos = own_position(iface)
+                except Exception as exc:                   # loud, counted, never silent
+                    tracker.stats.errors += 1
+                    tracker.defer(now)
+                    print(f"[ERROR] reading own position: {exc!r}", file=sys.stderr)
+                else:
+                    row = tracker.sample(pos, mono=now, wall=time.time())
+                    if row is not None:
+                        for sink in track_sinks:
+                            sink.track(row)
+                        if tracker.stats.fixes == 1:
+                            sats = row["sats_in_view"]
+                            term.message(f"[RX] first own fix: {row['latitude']:.5f}, "
+                                         f"{row['longitude']:.5f}"
+                                         + (f" ({sats} sats)" if sats else ""))
     except KeyboardInterrupt:
         pass
     finally:
@@ -155,9 +201,10 @@ def main(argv: list[str] | None = None) -> int:
                      f"{_dt.timedelta(seconds=int(time.time() - start))} ──")
         for line in Summary.render(rows):
             term.message(line)
-        for line in rx.counters_lines():
+        for line in rx.counters_lines() + tracker.counters_lines():
             term.message(line)
         meta.ended_utc = iso(time.time())
+        meta.track = tracker.as_dict() if tracker.enabled else None
         meta.decode_stats = {**rx.stats.as_dict(), "processing_errors": rx.errors}
         meta.summary = rows
         meta.gaps = [{"ref": r, "kind": k, "count": n} for (r, k), n in rx.gaps.gaps.items()]

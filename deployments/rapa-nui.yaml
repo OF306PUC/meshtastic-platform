@@ -47,6 +47,14 @@
 #   sensors   only 3 SenseCAP carry the SHT4X; a node without it must NOT declare
 #             an `environment` cadence (V3b)
 #   the fiberglass set must not be the sensorised set (S1)
+#   cadences  device and environment every 120 s — the dense flows the channel
+#             study measures; position every 3600 s, because these nodes are
+#             bolted to a post and their coordinate is already in `site`. Their
+#             GPS still runs (one fix an hour: `plan.GPS_UPDATE_INTERVAL_S`) so
+#             that what a node reports can be compared with its surveyed point
+#             — that difference is the only check that a node was installed
+#             where the file says it was. A gap in the position flow is only
+#             announced after 1.5 x 3600 s, by design: it is the sparse flow.
 # N6 is fiberglass (decided). The antenna and sensor of N1–N5 are PROVISIONAL:
 # confirm them when each physical unit is labelled.
 
@@ -101,7 +109,7 @@ nodes:
       surveyed: {lat: null, lon: null, alt_m: null, alt_source: null}
       antenna_height_m: null
       mount: null
-    intervals: {device: 120, environment: 120, position: 600}
+    intervals: {device: 120, environment: 120, position: 3600}
     sensors:
       - {type: SHT4X, i2c_addr: "0x44", port: grove}
 
@@ -128,7 +136,7 @@ nodes:
       surveyed: {lat: null, lon: null, alt_m: null, alt_source: null}
       antenna_height_m: null
       mount: null
-    intervals: {device: 120, environment: 120, position: 600}
+    intervals: {device: 120, environment: 120, position: 3600}
     sensors:
       - {type: SHT4X, i2c_addr: "0x44", port: grove}
 
@@ -155,7 +163,7 @@ nodes:
       surveyed: {lat: null, lon: null, alt_m: null, alt_source: null}
       antenna_height_m: null
       mount: null
-    intervals: {device: 120, environment: 120, position: 600}
+    intervals: {device: 120, environment: 120, position: 3600}
     sensors:
       - {type: SHT4X, i2c_addr: "0x44", port: grove}
 
@@ -183,7 +191,7 @@ nodes:
       surveyed: {lat: null, lon: null, alt_m: null, alt_source: null}
       antenna_height_m: null
       mount: null
-    intervals: {device: 120, position: 600}
+    intervals: {device: 120, position: 3600}
     sensors: []
 
   - ref: N5
@@ -209,7 +217,7 @@ nodes:
       surveyed: {lat: null, lon: null, alt_m: null, alt_source: null}
       antenna_height_m: null
       mount: null
-    intervals: {device: 120, position: 600}
+    intervals: {device: 120, position: 3600}
     sensors: []
 
   - ref: N6
@@ -235,7 +243,7 @@ nodes:
       surveyed: {lat: null, lon: null, alt_m: null, alt_source: null}
       antenna_height_m: null
       mount: null
-    intervals: {device: 120, position: 600}
+    intervals: {device: 120, position: 3600}
     sensors: []
 
   # ── Gateway: a LILYGO on USB to its host (Raspberry Pi or Jetson) ────────────
@@ -272,9 +280,15 @@ nodes:
   # ── Channel-study receivers: a LILYGO on a PC running receiver.py ────────────
   # In the registry so their firmware is held to V5 too — the receiving radio's
   # sensitivity is part of every measurement it takes — and so every record
-  # names the antenna it was received on. GPS off: a receiver at a fixed point
-  # records that point in `site`. To walk with one and log its GPS track, add
-  # `position: 30` to its intervals and provision it again.
+  # names the antenna it was received on.
+  #
+  # GPS on with a SLOW position flow: 900 s is what each receiver puts on air
+  # (the firmware's own default, so the channel it measures pays for one packet
+  # every 15 min), while `receiver.py --track-secs 30` samples the fix over USB
+  # for the route. `gps_update_interval` is 30 s on a receiver, so the track has
+  # that resolution without any of it costing airtime. A receiver that will not
+  # move needs no flow at all: set `intervals: {}` and record the point in
+  # `site` instead.
   - ref: R1
     function: receiver
     status: planned
@@ -298,7 +312,7 @@ nodes:
       surveyed: {lat: null, lon: null, alt_m: null, alt_source: null}
       antenna_height_m: null
       mount: null
-    intervals: {}
+    intervals: {position: 900}   # on air; the route is sampled over USB
     sensors: []
 
   - ref: R2
@@ -324,5 +338,5 @@ nodes:
       surveyed: {lat: null, lon: null, alt_m: null, alt_source: null}
       antenna_height_m: null
       mount: null
-    intervals: {}
+    intervals: {position: 900}   # on air; the route is sampled over USB
     sensors: []

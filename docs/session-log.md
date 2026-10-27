@@ -20,6 +20,166 @@ Entry format:
 
 ---
 
+## 2026-10-27 — README multimáquina, paquetes propios y traza GPS del receptor
+**Time:** 16:30 (aprox)
+**User request:** (1) la sección "Channel study" del README no es clara respecto
+al soporte multimáquina, y el `export` del bloque de comandos no aplica; (2) por
+qué el receptor escucha sus propios paquetes y los muestra con `?` en hops, RSSI
+y SNR, y si esas copias pasan por el aire; (3) que el computador + nodo registre
+la posición cada 30 s-1 min para poder trazar el trayecto.
+
+### Actions taken
+- `README.md`, "Channel study": fuera `export MESH_DEPLOYMENT=my-mesh` (solo
+  bash/zsh); los comandos usan `-d my-mesh` explícito. Párrafo nuevo: ambos se
+  corren desde la raíz del repo en cualquier OS, el único argumento que
+  pertenece a la máquina es `--port` (el receptor siempre lo necesita, a
+  diferencia de `inspect`), y los directorios de salida son rutas relativas que
+  los sinks crean solos (`sink/csv.py:25`, `sink/jsonl.py:22`).
+- Subsección nueva "Recording from more than one machine": una radio, un
+  `receiver.py`, un `--operator`, un directorio por corrida (un segundo
+  receptor apuntado al mismo directorio sobrescribe su `session.json`); cada
+  corrida se autodescribe (run id, operador, radio receptora, SHA-256 del
+  deployment, `git describe`), y `load_sessions()` se niega a mezclar
+  deployments o presets. Dicho explícitamente que `plot_session` grafica un
+  directorio a la vez y que `load_sessions()` es función de biblioteca, sin CLI.
+- Donde se introduce `MESH_DEPLOYMENT` (sección Deployments): las tres formas de
+  definirla (`export` / `$env:` / `set`), y que nada se asume por defecto.
+- Comparación con la copia del gateway: agregado el equivalente Windows de
+  `sha256sum` (`Get-FileHash`), mismo defecto que el `export`.
+- Respondida la pregunta de los paquetes propios sin cambiar código.
+
+### Decisions (documentación)
+- "Multimáquina" se documentó en sus dos lecturas, porque las dos estaban poco
+  claras: cualquier OS/máquina (solo cambia el puerto) y varios receptores
+  grabando a la vez (un directorio por corrida, comparables por los hashes).
+- No se oculta en el terminal lo que la radio del receptor origina. Se ofreció
+  una bandera `--show-own` y el usuario prefirió dejarlo como está: esas filas
+  llevan `(own)`, quedan fuera del resumen y de la detección de silencios
+  (`listener.py:108,111`) y `plot_session` usa `own == 1` a propósito para la
+  traza GPS del receptor.
+- `?` y no `0` en hops/RSSI/SNR de un paquete propio: nunca entró por el
+  demodulador, así que no hay `rxRssi`/`rxSnr`/`hopStart` que leer. Un 0 sería
+  un dato inventado (0 dBm y 0.0 dB son medidas reales; regla 9).
+- Sin placeholders con nombres reales en el README: `--operator <name>` y
+  `runs/2026-11-03-hilltop/` en lugar del handle del usuario.
+
+### Outcomes (documentación)
+- 193 tests OK; `configure.py validate --all` sin errores en esa primera parte,
+  solo documentación.
+
+- **Traza GPS del receptor (pedido del usuario: posición cada 30 s-1 min para
+  trazar el trayecto).** Implementado leyendo el fix por USB, no por el aire:
+  - `channel_study/track.py` (nuevo): `Tracker` muestrea con periodo fijo,
+    `own_position(iface)` lee `getMyNodeInfo()["position"]`, `TRACK_COLUMNS` /
+    `track.csv`. El primer muestreo es inmediato (una sesión corta igual deja
+    constancia de dónde empezó) y un fix idéntico al anterior se marca
+    `repeated=1` (la marca de tiempo del GPS entra en la comparación: un receptor
+    quieto con GPS vivo NO se marca, porque su timestamp avanza; lo que se marca
+    es que no llegó nada nuevo).
+  - `receiver.py`: `--track-secs` (30 por defecto, `0` apaga), activo solo con
+    `--csv`/`--jsonl`; avisa si `position.gps_mode` no es `ENABLED`; imprime el
+    primer fix y los contadores al cerrar; `session.json` gana el bloque
+    `track` y `receiver.position` (el fix de arranque, que ya estaba en
+    `snapshot()` y se descartaba).
+  - `sink/csv.py` y `sink/jsonl.py`: método `track()` (`track.csv`;
+    `events.jsonl` con `event: own_position`), mismo patrón que `note()`.
+  - `analysis/plot_session.py`: la traza sale de `track.csv` si existe y, si no,
+    de las posiciones que la radio emitió (sesiones anteriores siguen
+    graficando); el caption dice de dónde salió y cuántas muestras repiten.
+  - 8 tests nuevos en `test_channel_study.py` (periodo, apagado, repetidos, sin
+    fix, error de lectura, cabecera estable con celdas vacías, evento JSONL,
+    `own_position`).
+
+### Decisions
+- **Dos cadencias separadas, y es la decisión de diseño del cambio:** lo que la
+  radio pone AL AIRE es el flujo `position` declarado en el archivo de
+  deployment (regla 3: las cadencias viven ahí); cada cuánto el computador lee
+  el fix por USB es `--track-secs`, propiedad de la máquina que graba, como
+  `--port`. Leer no cuesta aire, así que se puede trazar el trayecto sin
+  ensuciar el canal que se mide: `position: 3600` al aire + `--track-secs 30`
+  da trayecto denso por un paquete cada hora.
+- No se agregó un campo nuevo al deployment para "GPS encendido y nunca al
+  aire": el firmware emitiría igual a la cadencia por defecto, un flujo que
+  nadie declaró ni espera — justo lo que la regla 3 evita. Rechazado.
+- `GPS_UPDATE_INTERVAL_S["receiver"]` ya era 30 s, así que el muestreo a 30 s no
+  repite por construcción. Con `--track-secs` más corto que eso, sí repetiría: de
+  ahí la columna `repeated` y su línea en troubleshooting.
+- Una muestra sin fix no escribe fila (no se inventan ceros) pero se cuenta
+  (`no_fix`), y un error de lectura espera un periodo completo en vez de
+  reintentar cada segundo (`Tracker.defer`).
+
+### Outcomes
+- 201 tests OK; pyflakes limpio; `configure.py validate --all` sin errores.
+- Documentado en README (bullet "Where the receiver was"), troubleshooting
+  (entrada nueva "The GPS track is empty or frozen", con tabla de causas) y
+  project-overview (decisión de las dos cadencias).
+
+- Leída la documentación del módulo Position de Meshtastic (indicada por el
+  usuario) y aplicado lo que sirve:
+  - `position.fixed_position` se escribe en **false en toda radio**, con GPS o
+    sin él (`plan.position_settings`). El CLI lo enciende de forma implícita
+    cuando alguien fija una latitud y longitud, así que una radio reutilizada
+    puede llegar con él puesto y reportar coordenadas guardadas mientras su GPS
+    funciona. El inspector ya lo revisaba (I3) pero `provision` nunca lo
+    escribía: se revisaba algo que no se configuraba.
+  - Defectos de fábrica anotados en el código, porque los tres son malos para un
+    estudio de canal: `gps_update_interval` 0 = cada 2 min,
+    `position_broadcast_secs` 0 = 15 min, `position_broadcast_smart_enabled`
+    = **true**. Los tres se escriben explícitamente.
+  - Confirmado que el plan ya manda todos los campos de posición en UN solo
+    comando `--set`, que es justo lo que recomienda la documentación.
+  - Receptores con flujo `position: 900` (15 min al aire, > 10 min que aprobó el
+    usuario) en `mini.yaml` y en R1/R2 de `rapa-nui.yaml`; la resolución del
+    trayecto la da `--track-secs 30` por USB. Comentario corregido en
+    `rapa-nui.yaml` y en `_template.yaml`: decían "agrega `position: 30` para
+    registrar la traza", que ahora gastaría el canal medido sin necesidad.
+  - `position.flags` queda en UNSET: los paquetes POSITION llevan solo lat/lon
+    (sin altitud, sats ni DOP). Es lo correcto para el aire (paquete más corto =
+    menos tiempo en el aire = menos perturbación de la medición), pero explica
+    por qué la columna `altitude` de un nodo remoto puede venir vacía.
+
+### Decisions
+- Se modificó la LETRA de `test_no_position_is_ever_written_to_a_radio`, no su
+  intención: antes prohibía el texto `fixed_position` en el plan; ahora prohíbe
+  `--setlat/--setlon/--setalt` y `fixed_position true`, y EXIGE
+  `--set position.fixed_position false` en toda radio. Escribir ese campo en
+  false no es escribir una posición: es lo que impide que la radio invente una.
+
+- **Decisión del usuario sobre `fixed_position` (preguntado explícitamente).**
+  Se le planteó que poner `fixed_position true` en los SenseCAP estáticos
+  obligaría a escribir las coordenadas de `site.surveyed` en la radio, lo que
+  contradice la regla 6 y, sobre todo, destruye la única verificación de que un
+  nodo quedó donde dice el archivo (`model.py:80-83`: la diferencia entre lo
+  reportado y lo relevado se lee como error de GPS). Además hoy no hay nada que
+  escribir: los `surveyed` de Rapa Nui son `null`.
+  Respuesta: **GPS real, pero con los intervalos máximos de update y
+  transmisión en los estáticos.** Aplicado:
+  - `GPS_UPDATE_INTERVAL_S` pasa a `{node: 3600, pbx: 3600, receiver: 30,
+    gateway: 3600}`. La tabla se indexa por función porque la función es lo que
+    dice si la radio se mueve. NO se usó maxint, que el firmware lee como "un
+    fix solo al arrancar": un nodo encendido bajo techo durante la instalación
+    no volvería a fijar nunca y no reportaría posición en semanas, en silencio.
+  - Nodos de campo de `rapa-nui`: `position: 600` → `position: 3600`. El flujo
+    de posición queda como el flujo disperso (el `GapWatcher` lo anuncia a
+    1.5 x 3600 s); los densos siguen siendo `device` y `environment` a 120 s.
+  - `fixed_position` sigue escribiéndose `false` en toda radio.
+
+### Next steps / open questions
+- `san-joaquin` NO se tocó: sus nodos 1-3 están `deployed` con `position: 600` y
+  fueron provisionados con `gps_update_interval` 300. Con la tabla nueva,
+  `inspect` sobre ellos va a reportar 3600 esperado vs 300 leído hasta que se
+  re-provisionen (es una diferencia benigna: el intervalo de fix no cuesta aire
+  ni afecta a ningún estimador). Decidir si se re-provisionan en la próxima
+  visita o si se baja la tabla a 300 para esa malla.
+- Un LILYGO bajo techo nunca consigue fix; probar la traza al aire libre.
+- Confirmar en la primera salida si `getMyNodeInfo()["position"]` entrega
+  altitud y `satsInView` del propio nodo (las columnas existen y quedan vacías
+  si el firmware no las da; `position.flags` solo afecta a lo que sale al aire).
+- `bench-lilygo` mantiene su receptor con `intervals: {}`: es un escritorio, no
+  hay fix bajo techo.
+
+---
+
 ## 2026-10-27 — Falso positivo: "device.rebroadcast_mode did not persist"
 **Time:** 14:00 (aprox)
 **User request:** al configurar un nodo SenseCAP en Windows (`--port COM4`)

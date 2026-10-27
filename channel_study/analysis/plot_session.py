@@ -7,7 +7,9 @@ Per node: RSSI | SNR, then environment and device panels when the node sends
 them. Direct (hop 0) and relayed receptions are separate series, because for a
 relayed packet RSSI/SNR describe relay -> receiver, not the node's own link.
 Gaps the receiver announced (gaps.csv) are shaded. For the receiving radio's
-own GPS track: latitude, longitude, altitude, and the trajectory.
+own GPS track: latitude, longitude, altitude, and the trajectory — from
+track.csv, sampled over USB during the session, or failing that from the
+positions that radio put on air.
 
 Conventions (plotstyle): 7.16 in = IEEE double-column width; no titles inside
 the artwork; identity never by colour alone; vector PDF for publication, PNG
@@ -26,6 +28,7 @@ import pandas as pd
 
 from channel_study.analysis import plotstyle
 from channel_study.session import load_session
+from channel_study.track import TRACK_FILE
 
 WIDTH_IN = 7.16
 REVIEW_DPI = 200
@@ -180,11 +183,27 @@ def plot_node(session_dir: Path, ref: str, meta: dict, gaps: pd.DataFrame, out: 
     return _save(fig, out, f"{meta['run_id']}_{ref}", caption)
 
 
+def _track_frame(session_dir: Path, rx_ref: str) -> tuple[pd.DataFrame, str]:
+    """The locally sampled track, or failing that the broadcast one.
+
+    track.csv is read over USB on --track-secs: denser, and it costs no airtime.
+    A session recorded without it has only the positions that radio put on air,
+    at its declared cadence.
+    """
+    df = _read(session_dir / TRACK_FILE)
+    if not df.empty:
+        return df.dropna(subset=["latitude", "longitude"]), "sampled over USB"
+    df = _read(session_dir / f"{rx_ref}_position.csv")
+    if not df.empty:
+        if "own" in df.columns:
+            df = df[df["own"] == 1]
+        df = df.dropna(subset=["latitude", "longitude"])
+    return df, "from the positions it broadcast"
+
+
 def plot_track(session_dir: Path, meta: dict, out: Path):
     rx_ref = meta["receiver"].get("ref") or "self"
-    df = _read(session_dir / f"{rx_ref}_position.csv")
-    if not df.empty and "own" in df.columns:
-        df = df[df["own"] == 1].dropna(subset=["latitude", "longitude"])
+    df, source = _track_frame(session_dir, rx_ref)
     if df.empty:
         print("[SKIP] no GPS track from the receiving radio")
         return
@@ -213,8 +232,14 @@ def plot_track(session_dir: Path, meta: dict, out: Path):
     ax_traj.ticklabel_format(useOffset=False, style="plain")
     ax_traj.tick_params(axis="x", labelrotation=30)
     fig.tight_layout(h_pad=0.6)
+    interval = (meta.get("track") or {}).get("interval_s")
+    every = f" every {interval:g} s" if interval and source.endswith("USB") else ""
+    repeated = int(df["repeated"].sum()) if "repeated" in df.columns else 0
     caption = (f"GPS track of the receiving radio {rx_ref} during run {meta['run_id']} "
-               f"(deployment {meta['deployment']['name']}).")
+               f"(deployment {meta['deployment']['name']}), {source}{every}: "
+               f"{len(df)} fixes."
+               + (f" {repeated} of them repeat the previous fix, GPS timestamp included: "
+                  f"nothing new arrived from the receiver's own GPS." if repeated else ""))
     return _save(fig, out, f"{meta['run_id']}_track", caption)
 
 

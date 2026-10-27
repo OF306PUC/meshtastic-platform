@@ -3,6 +3,8 @@
     <dir>/N4_environment.csv    every column of records.columns("environment"),
                                 whatever a given packet carried
     <dir>/gaps.csv              every gap opened and closed (silence is data)
+    <dir>/track.csv             the receiving radio's own position, sampled over
+                                USB on --track-secs (see channel_study.track)
 
 A stable header means a file can be concatenated with another session's and
 read without guessing which columns exist; an absent value is an empty cell,
@@ -15,6 +17,7 @@ from pathlib import Path
 
 from channel_study.gaps import GapEvent
 from channel_study.records import TABLE_KINDS, Reception, columns
+from channel_study.track import TRACK_COLUMNS, TRACK_FILE
 
 GAP_COLUMNS = ["received_at", "run_id", "ref", "kind", "state", "silent_s", "interval_s"]
 
@@ -52,6 +55,9 @@ class CsvSink:
             "ref": event.ref, "kind": event.kind, "state": event.state,
             "silent_s": round(event.silent_s, 1), "interval_s": event.interval,
         })
+
+    def track(self, row: dict) -> None:
+        self._writer(TRACK_FILE, TRACK_COLUMNS).writerow(row)
 
     def close(self) -> None:
         for fh, _ in self._files.values():

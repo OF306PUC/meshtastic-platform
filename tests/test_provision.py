@@ -92,20 +92,55 @@ class TestNodePlan(unittest.TestCase):
         self.assertEqual((f["device.role"], f["position.gps_mode"]), ("CLIENT_MUTE", "DISABLED"))
         self.assertNotIn("position.position_broadcast_secs", f)
 
-    def test_walking_receiver_logs_its_track(self):
+    def test_a_static_radio_fixes_once_an_hour_and_a_mobile_one_every_30_s(self):
+        """The fix interval follows mobility, which today follows the function.
+
+        A SenseCAP bolted to a post needs one fix an hour; the receiver walking
+        a route needs one every 30 s. Neither costs airtime.
+        """
+        self.assertEqual(flags(self.plan_for("N1"))["position.gps_update_interval"], "3600")
         data = field_registry()
-        data["nodes"][4]["intervals"] = {"position": 30}
+        data["nodes"][4]["intervals"] = {"position": 3600}
+        self.assertEqual(flags(self.plan_for("R1", parse(data)))["position.gps_update_interval"],
+                         "30")
+
+    def test_a_walking_receiver_broadcasts_slowly_and_fixes_fast(self):
+        """The air cadence and the fix interval are independent on purpose.
+
+        receiver.py samples the track over USB (--track-secs), so the mesh pays
+        for one position every 15 minutes while the fix behind it is never more
+        than 30 s old. A 30 s broadcast would spend the channel being measured.
+        """
+        data = field_registry()
+        data["nodes"][4]["intervals"] = {"position": 900}
         f = flags(self.plan_for("R1", parse(data)))
         self.assertEqual((f["position.gps_mode"], f["position.position_broadcast_secs"],
-                          f["position.gps_update_interval"]), ("ENABLED", "30", "30"))
+                          f["position.gps_update_interval"]), ("ENABLED", "900", "30"))
 
     def test_no_position_is_ever_written_to_a_radio(self):
-        """The surveyed position is a record, never a radio setting."""
+        """The surveyed position is a record, never a radio setting.
+
+        `position.fixed_position false` is the one position field that IS
+        written, on every radio: it is what keeps a radio reporting its own fix
+        instead of stored coordinates. The Meshtastic CLI enables it implicitly
+        whenever a latitude and longitude are set, so a radio reused from
+        another project can arrive with it on (I3).
+        """
         for reg in (self.reg, parse(bench(field_registry()))):
             for n in reg.nodes:
                 argv = " ".join(" ".join(s.argv) for s in self.plan_for(n.ref, reg))
-                for forbidden in ("--setlat", "--setlon", "--setalt", "fixed_position"):
+                for forbidden in ("--setlat", "--setlon", "--setalt",
+                                  "fixed_position true", "fixed_position True"):
                     self.assertNotIn(forbidden, argv, n.ref)
+                self.assertIn("--set position.fixed_position false", argv, n.ref)
+
+    def test_fixed_position_is_written_off_even_with_the_gps_off(self):
+        # A radio arriving with fixed_position on would report stored
+        # coordinates whether or not we enable its GPS.
+        for ref in ("GW", "R1"):                      # both have no position flow
+            f = flags(self.plan_for(ref))
+            self.assertEqual((f["position.gps_mode"], f["position.fixed_position"]),
+                             ("DISABLED", "false"), ref)
 
     def test_psks_are_never_displayed(self):
         steps = self.plan_for("N1")

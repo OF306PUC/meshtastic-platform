@@ -21,6 +21,7 @@ entries (broker credentials, containers, database timestamps) moved to
 | Every node reports the same coordinates | [Positions all identical](#positions-all-identical) |
 | Serial port busy, or the board reboots when you connect | [Serial port contention](#serial-port-contention) |
 | `WriteFile failed` / `Aborting due to` on the last step | [The reboot step fails on Windows](#the-reboot-step-fails-on-windows) |
+| `track.csv` is missing, empty, or always the same point | [The GPS track is empty or frozen](#the-gps-track-is-empty-or-frozen) |
 
 ---
 
@@ -269,6 +270,40 @@ python configure.py inspect -d <name> --node <ref> --port COM4
 If the radio answers and `inspect` exits 0, it rebooted and is configured. If
 it does not answer, power-cycle it (unplug the USB) and inspect again. Settings
 that only take effect after a reboot are applied by that power-cycle.
+
+---
+
+## The GPS track is empty or frozen
+
+**Symptom.** A recorded session has no `track.csv`, or it has rows whose
+`repeated` column is 1 all the way down, or `plot_session` prints
+`[SKIP] no GPS track from the receiving radio`.
+
+The receiver samples its own fix over USB every `--track-secs` seconds (30 by
+default) and writes `track.csv` next to the data. Read the start-up lines and
+the counters printed on Ctrl+C — `own position: N fixes in M samples every 30 s`
+— and work down this list:
+
+| What you see | Cause |
+|---|---|
+| No `track.csv` at all | No `--csv`/`--jsonl`: a track has nowhere to go. Or `--track-secs 0`. |
+| `WARNING: --track-secs is set but this radio's position.gps_mode is DISABLED` | The receiver's entry declares no `position` flow, so `provision` turned the GPS off (`position_settings`). Declare one and re-provision. |
+| `0 fixes in M samples` | The GPS is on but has no fix: a LILYGO indoors never gets one. Take it outside with a view of the sky; a cold start takes minutes. |
+| Every row `repeated=1` | Nothing new is arriving: the radio keeps handing over the identical fix, GPS timestamp included — its GPS stopped updating, or it lost the fix and kept the last one. A receiver that is merely parked is NOT marked, because its timestamp advances. `position.gps_update_interval` is 30 s on a receiver, so a `--track-secs` shorter than that repeats by construction. |
+| `read errors` in the counters | The serial link failed mid-session. The packets in the same session are fine; the track has holes. |
+| `gps_mode is NOT_PRESENT` | That board has no GPS chip at all. Do not declare a position flow for it; record its point in `site` instead. |
+
+**A radio that arrives with a fixed position.** The Meshtastic CLI turns
+`position.fixed_position` on implicitly whenever someone sets a latitude and
+longitude, and such a radio then reports those stored coordinates while its GPS
+runs — the track follows the GPS, the mesh is told something else.
+`provision` writes `position.fixed_position false` on every radio, so
+re-provisioning is the fix; `meshtastic --port <port> --remove-position` also
+clears the stored coordinates.
+
+A track costs no airtime — the fix travels up the USB cable, not over LoRa.
+What does cost airtime is the `position` flow itself, which is why it is
+normally declared long (one packet an hour) while `--track-secs` stays short.
 
 ---
 

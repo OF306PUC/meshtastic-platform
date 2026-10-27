@@ -136,5 +136,6 @@ nodes:
       surveyed: {lat: null, lon: null, alt_m: null, alt_source: null}
       antenna_height_m: null
       mount: null
-    intervals: {}                # add `position: 30` to log its GPS track while walking
+    intervals: {}                # `position: 900` turns its GPS on; the route itself
+                                 # is sampled over USB (receiver.py --track-secs)
     sensors: []

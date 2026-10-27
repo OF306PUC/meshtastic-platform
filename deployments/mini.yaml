@@ -13,7 +13,10 @@
 #      Copy the node_id, mac and firmware the inspector prints into the entry.
 #      A node without node_id is not expected by the receiver: it shows up as
 #      an unknown sender and its silences are not reported.
-#   4. python receiver.py -d mini --port /dev/serial/by-id/<R1>
+#   4. python receiver.py -d mini --port /dev/serial/by-id/<R1> --csv runs/<date>/ \
+#        --operator <name> --track-secs 30
+#      --track-secs samples where the receiver was, over USB and at no cost in
+#      airtime; 0 turns it off.
 #
 # Radios on a desk: switch to `kind: bench` and set every tx_power_dbm to its
 # chip minimum (-9 on the SenseCAP, 2 on the T-Beam), or they saturate each
@@ -92,7 +95,11 @@ nodes:
     intervals: {device: 120}
     sensors: []
 
-  # The receiver: a LILYGO on the laptop running receiver.py. Listens only.
+  # The receiver: a LILYGO on the laptop running receiver.py. Listens only,
+  # apart from one position every 900 s, which is all the mesh sees of it. Its
+  # route is sampled over USB instead — `receiver.py --track-secs 30`, no
+  # airtime. Indoors a T-Beam never gets a fix: set `intervals: {}` if this one
+  # stays on the desk.
   - ref: R1
     function: receiver
     status: planned
@@ -105,5 +112,5 @@ nodes:
     hop_limit: 1
     antenna: {type: rubber, gain_dbi: 2.0, band_mhz: null, model: LILYGO stock}
     tx_power_dbm: 20
-    intervals: {}
+    intervals: {position: 900}
     sensors: []

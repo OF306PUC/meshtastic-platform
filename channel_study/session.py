@@ -66,6 +66,7 @@ class SessionMeta:
     platform_version: str = meshtastic_platform.__version__
     ended_utc: str | None = None
     decode_stats: dict[str, Any] | None = None
+    track: dict[str, Any] | None = None
     summary: list[dict] | None = None
     gaps: list[dict] | None = None
 

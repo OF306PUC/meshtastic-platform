@@ -31,7 +31,7 @@ def healthy(**config):
         "lora.channel_num": 45, "lora.hop_limit": 1, "lora.tx_power": 22,
         "lora.sx126x_rx_boosted_gain": True, "lora.override_frequency": 0.0,
         "bluetooth.enabled": True, "serial.enabled": False,
-        "position.gps_mode": "ENABLED", "position.gps_update_interval": 300,
+        "position.gps_mode": "ENABLED", "position.gps_update_interval": 3600,
         "position.position_broadcast_secs": 600,
         "position.position_broadcast_smart_enabled": False, "position.fixed_position": False,
         "telemetry.device_telemetry_enabled": True, "telemetry.device_update_interval": 120,

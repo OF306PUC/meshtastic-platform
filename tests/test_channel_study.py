@@ -16,6 +16,7 @@ from channel_study.sink.csv import CsvSink
 from channel_study.sink.jsonl import JsonlSink
 from channel_study.sink.terminal import TerminalSink
 from channel_study.summary import Summary, percentile
+from channel_study.track import TRACK_COLUMNS, Tracker, own_position
 from meshtastic_platform.registry import parse
 from tests.fixtures import packets as pk
 from tests.test_registry import field_registry
@@ -328,6 +329,113 @@ class TestPubsubWiring(unittest.TestCase):
 
     def test_library_publishes_then_subscribe(self):
         self._run(subscribe_first=False)
+
+
+# The local node's position as the library reports it: floats added beside the
+# int32 fields, and whatever the GPS had at the time.
+FIX = {"latitude": -33.4489, "longitude": -70.6693, "altitude": 567,
+       "time": 1_700_000_002, "satsInView": 7, "precisionBits": 32}
+
+
+class TestTrack(unittest.TestCase):
+    """The receiving radio's own position, sampled over USB (no airtime)."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def tracker(self, interval=30.0):
+        return Tracker(run_id="run-1", ref="GW", interval_s=interval)
+
+    def test_the_first_sample_is_immediate_then_one_per_period(self):
+        tr = self.tracker()
+        self.assertTrue(tr.due(100.0))                 # a short session still has a start
+        tr.sample(FIX, mono=100.0, wall=1000.0)
+        self.assertFalse(tr.due(129.9))
+        self.assertTrue(tr.due(130.0))
+
+    def test_zero_seconds_is_off(self):
+        tr = self.tracker(0)
+        self.assertFalse(tr.enabled)
+        self.assertFalse(tr.due(1e9))
+        self.assertEqual(tr.counters_lines(), [])
+
+    def test_a_repeated_fix_is_marked_not_dropped(self):
+        tr = self.tracker()
+        first = tr.sample(FIX, mono=100.0, wall=1000.0)
+        same = tr.sample(dict(FIX), mono=130.0, wall=1030.0)
+        moved = tr.sample(dict(FIX, latitude=-33.4490, time=1_700_000_032),
+                          mono=160.0, wall=1060.0)
+        self.assertEqual([r["repeated"] for r in (first, same, moved)], [0, 1, 0])
+        self.assertEqual((tr.stats.fixes, tr.stats.repeated), (3, 1))
+        self.assertIn("1 repeated the previous fix", tr.counters_lines()[0])
+
+    def test_standing_still_with_a_live_gps_is_not_a_repeated_fix(self):
+        # Same coordinates, newer timestamp: the GPS is working and the receiver
+        # is parked. Marking that as repeated would hide the real failure.
+        tr = self.tracker()
+        tr.sample(FIX, mono=100.0, wall=1000.0)
+        parked = tr.sample(dict(FIX, time=FIX["time"] + 30), mono=130.0, wall=1030.0)
+        self.assertEqual(parked["repeated"], 0)
+        self.assertEqual(tr.stats.repeated, 0)
+
+    def test_a_sample_without_a_fix_records_nothing_and_is_counted(self):
+        tr = self.tracker()
+        self.assertIsNone(tr.sample({}, mono=100.0, wall=1000.0))
+        self.assertIsNone(tr.sample(None, mono=130.0, wall=1030.0))
+        self.assertEqual((tr.stats.samples, tr.stats.fixes, tr.stats.no_fix), (2, 0, 2))
+        self.assertIn("0 fixes in 2 samples", tr.counters_lines()[0])
+
+    def test_a_read_that_raised_is_retried_a_period_later_not_a_second_later(self):
+        tr = self.tracker()
+        tr.sample(FIX, mono=100.0, wall=1000.0)
+        tr.stats.errors += 1
+        tr.defer(130.0)
+        self.assertFalse(tr.due(159.9))
+        self.assertIn("1 read errors", tr.counters_lines()[0])
+
+    def test_csv_has_a_stable_header_and_leaves_an_absent_field_empty(self):
+        sink = CsvSink(self.dir, run_id="run-1")
+        tr = self.tracker()
+        sink.track(tr.sample({"latitude": FIX["latitude"], "longitude": FIX["longitude"]},
+                             mono=100.0, wall=1000.0))
+        sink.close()
+        with open(self.dir / "track.csv", newline="") as fh:
+            rows = list(csv.DictReader(fh))
+        with open(self.dir / "track.csv") as fh:
+            self.assertEqual(fh.readline().strip().split(","), TRACK_COLUMNS)
+        self.assertEqual(rows[0]["altitude"], "")                  # absent, never 0
+        self.assertEqual(rows[0]["sats_in_view"], "")
+        self.assertEqual((rows[0]["ref"], rows[0]["run_id"], rows[0]["repeated"]),
+                         ("GW", "run-1", "0"))
+
+    def test_jsonl_keeps_the_same_sample_as_an_event(self):
+        sink = JsonlSink(self.dir, run_id="run-1")
+        sink.track(self.tracker().sample(FIX, mono=100.0, wall=1000.0))
+        sink.close()
+        obj = json.loads((self.dir / "events.jsonl").read_text().splitlines()[0])
+        self.assertEqual(obj["event"], "own_position")
+        self.assertEqual((obj["latitude"], obj["sats_in_view"]), (FIX["latitude"], 7))
+
+    def test_own_position_reads_the_local_node_and_tolerates_no_fix(self):
+        class WithFix:
+            def getMyNodeInfo(self):
+                return {"num": 1, "position": FIX}
+
+        class Fresh:                      # no GPS yet: the key is there but empty
+            def getMyNodeInfo(self):
+                return {"num": 1, "position": {}}
+
+        class Silent:
+            def getMyNodeInfo(self):
+                return None
+
+        self.assertEqual(own_position(WithFix()), FIX)
+        self.assertEqual(own_position(Fresh()), {})
+        self.assertEqual(own_position(Silent()), {})
 
 
 class TestSession(unittest.TestCase):

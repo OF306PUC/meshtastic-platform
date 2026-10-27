@@ -24,9 +24,23 @@ from dataclasses import dataclass, field
 
 from meshtastic_platform.registry.model import Node, Registry
 
-# Local GPS fix interval per node function — a fix costs no airtime, so it is a
-# device setting, not a broadcast cadence (those live only in the registry).
-GPS_UPDATE_INTERVAL_S = {"node": 300, "pbx": 300, "receiver": 30, "gateway": 300}
+# Local GPS fix interval, keyed by function because that is what says whether
+# the radio moves. A fix costs no airtime, so this is a device setting, not a
+# broadcast cadence (those live only in the deployment file): how often the
+# radio puts a position ON AIR is its `position` flow, and this is only how
+# fresh the fix behind it is.
+#
+# A field node, a pbx radio and a gateway are bolted to something: one fix an
+# hour is more than they need, and the GPS sleeps the rest of the hour. Not
+# maxint — which the firmware reads as "once at boot" — because a node powered
+# on under a roof during installation would then never fix again, and would
+# report nothing for weeks without a word. A receiver is the one that moves:
+# 30 s, which is also the resolution of the track receiver.py samples over USB.
+#
+# Firmware defaults, for scale (meshtastic.org/docs/configuration/radio/position):
+# gps_update_interval 0 = every 2 min, position_broadcast_secs 0 = 15 min,
+# position_broadcast_smart_enabled = true. All three are written explicitly here.
+GPS_UPDATE_INTERVAL_S = {"node": 3600, "pbx": 3600, "receiver": 30, "gateway": 3600}
 
 REDACTED = "<psk>"
 
@@ -84,17 +98,35 @@ def telemetry_settings(reg: Registry, node: Node) -> list[tuple[str, str]]:
 
 
 def position_settings(reg: Registry, node: Node) -> list[tuple[str, str]]:
+    """GPS and position broadcasting. Every value written, none left to default.
+
+    `fixed_position` is written false on EVERY radio, GPS or no GPS. It is not a
+    position being written — it is the opposite: it is what keeps the radio
+    reporting its own fix. The Meshtastic CLI turns it on implicitly whenever
+    someone sets a latitude and longitude (`--remove-position` is what unsets
+    it), so a radio reused from another project can arrive with it on and then
+    report stored coordinates forever while its GPS runs. The inspector checks
+    it (I3); writing it here is what makes the check pass by construction.
+
+    The firmware's own defaults are all wrong for a channel study: smart
+    broadcast on (movement-triggered packets, no cadence to measure against),
+    a 15-minute position broadcast nobody declared, and a fix every 2 minutes.
+    All three are overwritten. The settings go out in ONE `--set` command,
+    which is also what the Meshtastic docs advise for position fields.
+    """
     iv = reg.intervals(node)
+    fixed = ("position.fixed_position", "false")
     smart = ("position.position_broadcast_smart_enabled",
              _b(reg.radio.position_broadcast_smart_enabled))
     if "position" not in iv:
         # No declared position flow: GPS off, or the node would broadcast at the
         # firmware default cadence — a flow no estimator expects.
-        return [("position.gps_mode", "DISABLED"), smart]
+        return [("position.gps_mode", "DISABLED"), smart, fixed]
     return [
         ("position.gps_mode", "ENABLED"),
-        ("position.gps_update_interval", str(GPS_UPDATE_INTERVAL_S.get(node.function, 300))),
+        ("position.gps_update_interval", str(GPS_UPDATE_INTERVAL_S.get(node.function, 3600))),
         smart,
+        fixed,
         ("position.position_broadcast_secs", str(iv["position"])),
     ]
 

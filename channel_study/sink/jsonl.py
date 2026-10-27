@@ -4,7 +4,8 @@
                           the ones the tables skip (node info, routing, unmapped
                           telemetry, undecryptable traffic): {"record": the flat
                           reception record, "packet": the full MeshPacket dict}
-    <dir>/events.jsonl    gaps opening and closing
+    <dir>/events.jsonl    gaps opening and closing, and each sample of the
+                          receiving radio's own position (--track-secs)
 """
 from __future__ import annotations
 
@@ -39,6 +40,11 @@ class JsonlSink:
                                        "event": f"gap_{event.state}", "ref": event.ref,
                                        "kind": event.kind, "silent_s": round(event.silent_s, 1),
                                        "interval_s": event.interval}) + "\n")
+        self._events.flush()
+
+    def track(self, row: dict) -> None:
+        self._events = self._events or open(self.dir / "events.jsonl", "a")
+        self._events.write(json.dumps({"event": "own_position", **row}, sort_keys=True) + "\n")
         self._events.flush()
 
     def close(self) -> None:
