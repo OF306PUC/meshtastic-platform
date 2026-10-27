@@ -28,21 +28,40 @@ cp .env.example .env               # channel keys (PSKs); only configure.py read
 source .venv/bin/activate
 ```
 
-Nothing is installed: the two programs import the `meshtastic_platform/` and
-`channel_study/` folders beside them, from any working directory.
+On Windows: `python -m venv .venv`, `copy .env.example .env`, and
+`.venv\Scripts\activate`. Everything after that is the same.
 
-Related firmware and services are pulled in as Git submodules under
-`external/` (`git submodule update --init` if you cloned without
-`--recursive`):
+Then put a key in `.env` for each channel your deployment names — the command
+is in the file, and works on any OS. Nothing is installed: the two programs
+import the `meshtastic_platform/` and `channel_study/` folders beside them,
+from any working directory.
 
-| Submodule | |
+The companion repositories are Git submodules under `external/`, **for
+reference only** — nothing here imports or builds from them
+(`git submodule update --init` if you cloned without `--recursive`):
+
+| Submodule | What it is |
 |---|---|
-| `external/meshpbx` | [OF306PUC/meshpbx](https://github.com/OF306PUC/meshpbx) |
+| `external/meshpbx` | [OF306PUC/meshpbx](https://github.com/OF306PUC/meshpbx) — the PBX firmware: a BLE processor that puts several phones on the mesh through one radio |
+| `external/meshtastic-gateway` | [OF306PUC/meshtastic-gateway](https://github.com/OF306PUC/meshtastic-gateway) — ingestion, delivery ratio (PDR), storage and dashboard |
 
-The gateway (`meshtastic-gateway`: ingestion, delivery ratio, storage,
-dashboard) shares no code with this platform. It pairs with it through the
-deployment file alone: keep the same file in both repositories — same SHA-256,
-which `receiver.py` records in each session.
+Neither shares code with this platform, and each owns a part of a radio this
+platform does not touch:
+
+* the **PBX project** configures the link between a `pbx` radio and its PBX
+  (serial module, Bluetooth); this platform gives that radio its membership in
+  the mesh, like any other radio;
+* the **gateway** forked this repository's decoder and pairs with the platform
+  through the deployment file alone: keep the same file in both repositories —
+  same SHA-256, which `receiver.py` records in each session. Nothing
+  synchronises the two copies, so compare them before a campaign:
+
+```bash
+sha256sum deployments/<name>.yaml external/meshtastic-gateway/deployments/<name>.yaml
+```
+
+(The gateway's `deployments/` holds no file yet: copy the ones it will measure
+before its first run.)
 
 ## Deployments
 
@@ -128,9 +147,9 @@ file, compared later with what the GPS reports.
 Flash the firmware first: [`docs/flashing.md`](docs/flashing.md). Then:
 
 ```bash
-python configure.py provision -d my-mesh --node N1 --port /dev/serial/by-id/... --dry-run   # print the plan
-python configure.py provision -d my-mesh --node N1 --port /dev/serial/by-id/...
-python configure.py inspect   -d my-mesh --node N1 --port /dev/serial/by-id/...
+python configure.py provision -d my-mesh --node N1 --port <port> --dry-run   # print the plan
+python configure.py provision -d my-mesh --node N1 --port <port>
+python configure.py inspect   -d my-mesh --node N1 --port <port>
 ```
 
 `provision` writes role, hop limit, slot, transmit power, cadences, sensors and
@@ -138,6 +157,30 @@ channels from the node's entry, and refuses a device that is not the one the
 entry describes (another node ID, a different board or firmware). `inspect`
 reads the radio back and exits 1 on any difference from the file — run it after
 every change. Copy the `node_id`, `mac` and firmware it prints into the file.
+
+### The serial port
+
+`<port>` is the USB serial port of the radio in front of you, passed on the
+command line every time. It is **not** stored anywhere — not in the deployment
+file, not in `.env` — because it belongs to the computer you are sitting at,
+not to the mesh.
+
+| OS | What it looks like | How to find it |
+|---|---|---|
+| Windows | `COM3`, `COM4`, … | Device Manager → Ports (COM & LPT) |
+| Linux | `/dev/serial/by-id/usb-…` (stable per device) | `ls /dev/serial/by-id/` |
+| macOS | `/dev/cu.usbserial-…`, `/dev/cu.usbmodem…` | `ls /dev/cu.*` |
+
+```bash
+python configure.py inspect -d my-mesh          # one radio plugged in: finds the port itself
+python configure.py inspect -d my-mesh --port COM3
+python receiver.py -d my-mesh --port COM3       # the receiver always needs --port
+```
+
+`configure.py inspect` finds the port by itself when exactly one radio is
+connected, and with several it lists them and stops rather than guessing. It
+also prints each device's `node_id`, which is how you tell two identical boards
+apart.
 
 When something fails: [`docs/troubleshooting.md`](docs/troubleshooting.md).
 
@@ -148,10 +191,10 @@ The receiver is a radio on a laptop, configured like any other node (a
 
 ```bash
 export MESH_DEPLOYMENT=my-mesh
-python receiver.py --port /dev/ttyACM0                                    # terminal only
-python receiver.py --port /dev/ttyACM0 --csv runs/2026-11-03/ --operator <name>
-python receiver.py --port /dev/ttyACM0 --node N1 --kind environment       # filter
-python receiver.py --port /dev/ttyACM0 --raw                              # full packets
+python receiver.py --port <port>                                          # terminal only
+python receiver.py --port <port> --csv runs/2026-11-03/ --operator <name>
+python receiver.py --port <port> --node N1 --kind environment             # filter
+python receiver.py --port <port> --raw                                    # full packets
 python -m channel_study.analysis.plot_session runs/2026-11-03/            # figures (from the repo root)
 ```
 
@@ -180,7 +223,8 @@ HH:MM:SS  ref   kind    hops  RSSI    SNR  payload
   summary.
 
 The receiver warns at start-up if its radio is not on the file's preset and
-slot.
+slot. `<port>` is the receiving radio's serial port — see
+[The serial port](#the-serial-port).
 
 ## The decoder
 

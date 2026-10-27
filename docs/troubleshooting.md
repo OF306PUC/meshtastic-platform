@@ -85,8 +85,13 @@ transmitting and its error surfaces weeks later. Read the reason:
 | `device runs firmware ... flash first` | Off-target firmware: see [`flashing.md`](flashing.md). |
 | `device !X is B3 in deployment bench-lilygo` | The device belongs to another deployment under another ref. |
 
-`ttyACM*` numbering is enumeration order, not identity: always pass a
-`/dev/serial/by-id/...` path.
+**Identify the port before trusting it.** On Linux, `ttyACM*` numbering is
+enumeration order, not identity: pass a `/dev/serial/by-id/...` path, which is
+stable per device. Windows (`COM3`, `COM4`…) and macOS (`/dev/cu.usbserial-…`)
+have no such stable alias, so with more than one radio plugged in, confirm
+which is which — `python configure.py inspect -d <name> --port <port>` prints
+the device's `node_id`, and `inspect` with no `--port` lists every radio it
+finds when there is more than one.
 
 ---
 
@@ -145,7 +150,7 @@ label or cadence changed here and not there makes the gateway measure against
 the wrong file, silently. Compare them:
 
 ```bash
-sha256sum deployments/<name>.yaml <gateway>/deployments/<name>.yaml
+sha256sum deployments/<name>.yaml external/meshtastic-gateway/deployments/<name>.yaml
 ```
 
 The hash must also match the `sha256` in the session's `session.json` and the

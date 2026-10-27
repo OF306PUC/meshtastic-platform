@@ -3,8 +3,9 @@
 # For trying the platform end to end: provision the three nodes, record what the
 # inspector reads from each, and watch them with the channel-study receiver.
 #
-#   1. Set MINI_PSK in .env (once, then the same on every radio):
-#        openssl rand -base64 32        -> MINI_PSK=base64:<that>
+#   1. Set MINI_PSK in .env (once, then the same on every radio). Prints the
+#      whole value, prefix included, on any OS:
+#        python -c "import secrets,base64;print('base64:'+base64.b64encode(secrets.token_bytes(32)).decode())"
 #   2. python configure.py validate -d mini
 #   3. Per radio, over USB (N1, N2, N3, R1):
 #        python configure.py provision -d mini --node N1 --port /dev/serial/by-id/...

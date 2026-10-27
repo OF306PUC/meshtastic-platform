@@ -15,8 +15,8 @@ the code.
 Split out of `meshtastic-testbed-platform` (read-only reference; it has
 uncommitted work). The split's guide, `REFACTOR-PLATFORM-GATEWAY.md`, now lives
 in `meshtastic-gateway`. Companion repos are submodules under `external/`:
-`meshpbx` (PBX firmware) now; `meshtastic-gateway` once it has a first commit,
-as a reference only.
+`meshpbx` (PBX firmware) and `meshtastic-gateway`, both as a reference only —
+no code here imports or builds from them.
 
 ## The gateway (`meshtastic-gateway`, sibling repository)
 
@@ -146,9 +146,9 @@ application. Updated 2026-10-27 to the split and to the target configuration.
   the same place they hear each other (`validate --all` notes it). Give one a
   different `channel_num` if they must coexist. rapa-nui and mini share neither
   names nor keys with them, only the airtime.
-* A change to a deployment file here must be copied to the gateway's copy;
-  nothing checks it except comparing the SHA-256 by hand.
-* `meshtastic-gateway` cannot be a submodule until it has a commit.
+* A change to a deployment file here must be copied to the gateway's copy
+  (`external/meshtastic-gateway/deployments/`, which holds none yet); nothing
+  checks it except comparing the SHA-256 by hand.
 * **SX1276 minimum:** 2 dBm (PA_BOOST); whether the RFO output, used below
   2 dBm, reaches the antenna is unverified.
 * A LILYGO indoors may get no GPS fix, hence no position flow (V3).

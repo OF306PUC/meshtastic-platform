@@ -501,7 +501,7 @@ def report(snap: Snapshot, reg: Registry, psks, *, ref=None, mesh=True) -> int:
     issues = print_local(snap, node, reg.radio.position_precision)
     print_config(snap)
     radio = check_radio(snap, reg, psks)
-    print_checks("Radio (vs radio/config.py and the deployment)", radio)
+    print_checks("Radio (vs the deployment's radio block)", radio)
     local = check_local(snap, reg, node, ref=ref)
     print_checks("Registry (local node vs its entry)", local)
     print("  Note: lora.tx_power is what the radio was TOLD. The real figure is the\n"

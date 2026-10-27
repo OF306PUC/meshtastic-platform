@@ -44,8 +44,9 @@ from meshtastic_platform.registry import ENV_DEPLOYMENT, RegistryError, availabl
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="python receiver.py", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--port", required=True, help="serial port of the receiving radio "
-                                                  "(prefer /dev/serial/by-id/...)")
+    ap.add_argument("--port", required=True,
+                    help="serial port of the receiving radio: COM3 on Windows, "
+                         "/dev/serial/by-id/... on Linux (stable), /dev/cu.* on macOS")
     ap.add_argument("--deployment", "-d", default=None,
                     help=f"a file in deployments/ without .yaml, or a YAML path "
                          f"(or set {ENV_DEPLOYMENT}); never defaulted; "

@@ -20,6 +20,77 @@ Entry format:
 
 ---
 
+## 2026-10-27 — Generación de claves portable (Windows)
+**Time:** 13:20 (aprox)
+**User request:** `openssl rand -base64 32` no funciona en Windows.
+
+### Actions taken
+- Reemplazado por un one-liner de Python en `.env.example` y en la cabecera de
+  `deployments/mini.yaml`:
+  `python -c "import secrets,base64;print('base64:'+base64.b64encode(secrets.token_bytes(32)).decode())"`
+  Verificado: produce 32 bytes que `radio.profile.decode_psk` acepta.
+- README: nota de setup para Windows (`python -m venv`, `copy`,
+  `.venv\Scripts\activate`) y una línea que manda a generar las claves con el
+  comando del `.env.example`.
+
+### Decisions
+- Python en vez de PowerShell: la plataforma ya lo exige, así que es el único
+  comando que sirve en los tres sistemas. Además imprime el valor completo con
+  el prefijo `base64:`, que `openssl` no incluye.
+- `openssl` queda mencionado como alternativa en Linux/macOS, con la advertencia
+  de que hay que agregarle el prefijo a mano.
+
+### Outcomes
+- 190 tests OK; `validate -d mini` OK.
+
+- Puertos serie (el usuario preguntó dónde están definidos): **en ninguna
+  parte** — son siempre el argumento `--port`, porque pertenecen al computador
+  y no a la malla. Documentado en una sección nueva del README, "The serial
+  port", con tabla por sistema (COMn / by-id / cu.*) y cómo encontrarlo;
+  los ejemplos del README usan `<port>` en vez de `/dev/ttyACM0`. La ayuda de
+  `--port` en `configure.py` y `receiver.py` nombra los tres formatos. En
+  troubleshooting, el consejo de usar `by-id` quedó marcado como propio de
+  Linux, con qué hacer en Windows/macOS (identificar por `node_id` con
+  `inspect`).
+- Corregido de paso: `inspector.py` imprimía "Radio (vs radio/config.py y el
+  deployment)" — ese archivo se eliminó en la generalización.
+- `configure.py inspect` autodetecta el puerto con una sola radio conectada
+  (`meshtastic.util.findPorts`, que en Windows devuelve COMn); `receiver.py`
+  sigue exigiendo `--port`.
+
+### Next steps / open questions
+- ¿Que `receiver.py` también autodetecte el puerto cuando hay una sola radio,
+  como hace `inspect`? Hoy es obligatorio pasarlo.
+
+---
+
+## 2026-10-27 — `meshtastic-gateway` como submódulo
+**Time:** 13:00 (aprox)
+**User request:** actualizar el README con el agregado del submódulo del gateway.
+
+### Actions taken
+- Verificado: el repositorio del gateway ya tiene su primer commit (`50dd922`)
+  y `external/meshtastic-gateway` está agregado (`.gitmodules`).
+- README: la sección de submódulos pasa a tabla de dos filas (meshpbx y
+  meshtastic-gateway), marcada **solo como referencia**, y explica qué parte de
+  una radio posee cada repositorio: el proyecto PBX el enlace de una radio
+  `pbx`, el gateway nada de configuración (se acopla solo por el archivo de
+  despliegue). Agregado el `sha256sum` para comparar las dos copias, con la nota
+  de que el `deployments/` del gateway todavía no tiene ningún archivo.
+- CLAUDE.md y project-overview: fuera el "once it has a first commit" y la
+  restricción "no puede ser submódulo hasta que tenga un commit"; la ruta de la
+  copia del gateway ahora es concreta.
+- `docs/troubleshooting.md`: el comando de comparación usa la ruta del submódulo.
+
+### Outcomes
+- 190 tests OK; sin enlaces rotos en README ni docs.
+
+### Next steps / open questions
+- Copiar a `external/meshtastic-gateway/deployments/` los archivos que el
+  gateway vaya a medir, antes de su primera corrida.
+
+---
+
 ## 2026-10-27 — `report/` fuera de git y al día con la plataforma
 **Time:** 11:00–12:30 (aprox)
 **User request:** ignorar `report/` en git (es metodología específica de una

@@ -205,7 +205,8 @@ def build_parser() -> argparse.ArgumentParser:
     _deployment_arg(p)
     p.add_argument("--node", "--ref", dest="node", required=True,
                    help="the node's ref in the deployment registry")
-    p.add_argument("--port", help="serial port (prefer /dev/serial/by-id/...)")
+    p.add_argument("--port", help="serial port: COM3 on Windows, "
+                                  "/dev/serial/by-id/... on Linux, /dev/cu.* on macOS")
     p.add_argument("--dry-run", action="store_true",
                    help="print the plan (and run the identity checks if --port is given); "
                         "write nothing")
@@ -213,7 +214,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("inspect", help="inspect a live radio against its deployment (exit 1 on drift)")
     _deployment_arg(p)
-    p.add_argument("--port", help="serial port; auto-detected only if exactly one device is present")
+    p.add_argument("--port", help="serial port (COM3, /dev/serial/by-id/..., /dev/cu.*); "
+                                  "auto-detected only if exactly one device is present")
     p.add_argument("--node", "--ref", dest="node",
                    help="the registry ref this device is expected to be (commissioning)")
     p.add_argument("--no-mesh", action="store_true", help="skip the mesh node-database cross-check")
