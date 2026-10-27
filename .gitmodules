@@ -1,3 +1,6 @@
 [submodule "external/meshpbx"]
 	path = external/meshpbx
 	url = https://github.com/OF306PUC/meshpbx
+[submodule "external/meshtastic-gateway"]
+	path = external/meshtastic-gateway
+	url = https://github.com/OF306PUC/meshtastic-gateway.git
