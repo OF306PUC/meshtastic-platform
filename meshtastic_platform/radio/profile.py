@@ -165,7 +165,10 @@ def channel_psks(profile: RadioProfile) -> dict[int, str]:
     if invalid:
         raise RuntimeError(
             f"Channel PSK(s) not valid: {', '.join(invalid)}. Expected base64:<key> of "
-            f"{'/'.join(map(str, PSK_LENGTHS))} bytes, e.g. from `openssl rand -base64 32`.")
+            f"{'/'.join(map(str, PSK_LENGTHS))} bytes. A new key, prefix included, on any OS: "
+            f"python -c \"import secrets,base64;"
+            f"print('base64:'+base64.b64encode(secrets.token_bytes(32)).decode())\". "
+            f"An existing mesh's key is not generated: copy it from whoever provisioned it.")
     return values
 
 

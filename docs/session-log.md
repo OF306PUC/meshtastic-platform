@@ -20,6 +20,125 @@ Entry format:
 
 ---
 
+## 2026-10-28 — Sniffer del campus San Joaquín: deployment del estado instalado
+**Time:** 10:30 (aprox)
+**User request:** probar la grabación de coordenadas GPS con una LILYGO conectada
+por USB al PC, escuchando la malla que está instalada hoy en el campus San
+Joaquín. "Todos los datos están en el proyecto viejo."
+
+### Actions taken
+- Localizado el monorepo viejo en
+  `~/Desktop/Personal-AI-Studio/meshtastic-testbed-platform` (solo lectura) y
+  extraído de ahí el estado real de la malla:
+  - `src/common/radio_config.py:46` → `LORA_PRESET = "LONG_TURBO"`, región ANZ,
+    canales `telCPS_RTC` / `msgPUC_NET`, precisión 32, `LOCAL_ONLY`,
+    `channel_num` nunca escrito.
+  - `mesh_config.json` → node_ids, `hop_limit: 2`, roles, cadencias
+    (1-3: device 120, environment 120, position 600; p1/p2: device 600,
+    position 1800) y posiciones relevadas. Coinciden con `san-joaquin.yaml`.
+  - `psks.txt` → `LORA_TELEMETRY_CHANNEL_PSK` y `LORA_MSG_CHANNEL_PSK`, los
+    mismos nombres de variable que lee esta plataforma.
+- Calculado con nuestro propio código el slot que el firmware deriva del nombre
+  del canal primario: `resolve_slot('ANZ','LONG_TURBO',None,'telCPS_RTC')` →
+  **slot 17/26 = 923.250 MHz** (djb2). Confirma el comentario de
+  `san-joaquin.yaml`.
+- Creado `deployments/san-joaquin-longturbo.yaml`: el campus TAL COMO ESTÁ
+  (LONG_TURBO, slot 17 explícito, mismos canales, nodos y cadencias) más una
+  entrada `R1` de función `receiver` (T-Beam, CLIENT_MUTE, hop_limit 1,
+  `intervals: {position: 900}`) para el sniffer. `validate` ✓.
+- `profile.channel_psks`: el mensaje de error ya no recomienda
+  `openssl rand -base64 32` (no existe en Windows y omite el prefijo
+  `base64:`); ahora da el one-liner de Python y aclara que la clave de una malla
+  existente no se genera, se copia.
+
+### Decisions
+- **Archivo aparte en vez de tocar `san-joaquin.yaml`.** Ese archivo es el
+  objetivo (MEDIUM_FAST, slot 45) y describe a dónde se va a re-provisionar la
+  malla. Un receptor configurado desde él no oye NADA de lo que hay en el aire:
+  otro preset, otra frecuencia, sin error, solo silencio. Además `session.json`
+  habría etiquetado los datos con un preset falso, y es justo lo que
+  `load_sessions()` existe para impedir.
+- `channel_num: 17` explícito y no nulo: V7 rechaza un slot implícito en una
+  malla viva (bien), y un receptor que derive el slot del NOMBRE seguiría el
+  nombre en silencio si alguien lo edita. El valor es el que los nodos calculan.
+- Las entradas de los nodos de campo van en el archivo pero **nada los
+  re-provisiona**: el receptor necesita sus node_ids (para nombrar al emisor),
+  sus cadencias (para anunciar silencios) y sus antenas y potencia (cada
+  registro de recepción lleva los dos extremos).
+- `position: 900` en R1 para que `provision` encienda su GPS; la resolución del
+  trayecto la da `--track-secs 30` por USB. Quitar `position` lo deja fuera del
+  aire, pero entonces no hay traza.
+
+### Outcomes
+- `validate -d san-joaquin-longturbo` ✓ (7 nodos, 923.250 MHz, cap SUBTEL j.3
+  27 dBm); `provision --dry-run --node R1` imprime el plan esperado.
+- 204 tests OK.
+
+### Next steps / open questions
+- **Bloqueante:** las dos claves del campus están como `base64:CHANGE_ME` en
+  `.env`. Hay que copiarlas de `psks.txt` del proyecto viejo (el cargador se
+  queda con la PRIMERA aparición de cada nombre, así que hay que borrar las
+  líneas placeholder). `provision` se niega sin ellas; `--dry-run` no.
+- La T-Beam del sniffer debe ser una NO registrada en otro deployment:
+  `!6c74104c` es GW de office-bench, `!bb8106c4` y `!6c743130` son p1/p2 de
+  san-joaquin. El preflight se niega a reasignarlas, a propósito.
+- Confirmar si los roles de los nodos 1 y 3 están hoy como dice
+  `mesh_config.json` (3 = CLIENT_BASE) o como dice la cabecera de
+  `san-joaquin.yaml` (1 = CLIENT_BASE). Para escuchar no importa; para el
+  análisis de saltos, sí.
+- Copiar `san-joaquin-longturbo.yaml` a `meshtastic-gateway/deployments/` si el
+  gateway va a medir esta malla (regla 2).
+
+---
+
+## 2026-10-27 — Diagramas de retransmisión y acceso al canal (CSMA/CA)
+**Time:** 17:10 (aprox)
+**User request:** Pegó las ecuaciones del algoritmo de retransmisión y del
+CSMA/CA de Meshtastic (ToA, slot, ventana de contención, tablas por SNR y por
+utilización) y pidió un diagrama detallado, con buena nomenclatura de variables
+(δ para el retardo), corrigiendo lo que estuviera mal.
+
+### Actions taken
+- Releídas las constantes en el firmware exacto del despliegue,
+  `meshtastic/firmware` tag `v2.7.26.54e0d8d`: `RadioInterface.{h,cpp}`
+  (`computeSlotTimeMsec`, `getPacketTime`, `getTxDelayMsec`, `getCWsize`,
+  `getTxDelayMsecWeighted(Worst)`, `getRetransmissionMsec`),
+  `RadioLibInterface.cpp` (`onNotify`, `setTransmitDelay`), `airtime.{h,cpp}`,
+  `FloodingRouter.cpp`, `NextHopRouter.cpp`, `PacketHistory.cpp`.
+- Verificadas las cifras con `meshtastic_platform.radio.presets` para
+  `LONG_TURBO`: T_s 4,096 ms, R_b 1343 bps, ToA(37 B) 345 ms, slot 17,84 → 17 ms.
+  Coinciden exactamente con `report/es/02-analitico-enlace-y-canal.md` §4.
+- Creados dos diagramas TikZ en `docs/diagrams/` (mismo patrón que
+  `membership.tex`: `palette.tex` + `build.sh`), construidos a PNG y PDF:
+  `rebroadcast.tex` (pipeline de decisión de retransmisión, con la rama de
+  duplicados) y `channel-access.tex` (panel A: lazo backoff + CAD; panel B:
+  todas las ecuaciones; panel C: las ventanas sobre el eje de tiempo más las
+  dos tablas numéricas).
+
+### Decisions
+- **Correcciones a las ecuaciones pegadas** (todas verificadas en el firmware
+  del despliegue, no en una versión anterior): `CWmin/CWmax` son **3/8**, no
+  2/7 → CW_size = ⌊U_ch/20⌋+3 y ⌊(SNR+20)/6⌋+3, y el piso del CLIENT es
+  2·CWmax = **16 slots = 272 ms**, no 14 slots/250 ms. El slot se trunca a
+  **17 ms** (`uint32`), así que todo δ es múltiplo de 17, no de 17,84. R_b
+  estaba invertida: R_b = SF·(BW/2^SF)·(4/d). ToA necesita N_sym explícito con
+  preámbulo de 16 símbolos (82,9 ms de los 345). La rama ROUTER es **lineal**
+  (`random(0, 2·CWsize)`), no 2^CWsize. U_ch cuenta TX propio **más toda**
+  recepción, decodificable o no, en 6 baldes de 10 s.
+- Figuras en inglés y en TikZ: es el precedente de `docs/diagrams/` y entran
+  directo en el LaTeX del informe; los captions del informe quedan en español.
+- No se tocó `report/es/02` §4: ya estaba correcto y las cifras coinciden.
+
+### Outcomes
+- `docs/diagrams/rebroadcast.{tex,png,pdf}` y
+  `docs/diagrams/channel-access.{tex,png,pdf}` construidos y revisados.
+
+### Next steps / open questions
+- Si el informe los usa, decidir si las etiquetas se traducen al español para
+  `report/es/` o si se comparten en inglés entre ambas versiones.
+- Re-verificar las constantes al subir de firmware: `CWmin/CWmax` ya cambiaron
+  de 2/7 a 3/8 entre versiones, y `SNR_MAX` es +10 (no +15) hoy.
+
 ## 2026-10-27 — README multimáquina, paquetes propios y traza GPS del receptor
 **Time:** 16:30 (aprox)
 **User request:** (1) la sección "Channel study" del README no es clara respecto
