@@ -1,0 +1,17 @@
+layer,codigo,nombre,lugar,lat,lon,cota,cota_rebalse,z_geom,estado_uso,caudal,volumen,prof,telemetria,telecontrol
+Captaciones,CSUBS-7,Pozo N 7,Mataveri,-27.164871,-109.437967,41.0,,41.0,5.0,8.0,,33.0,1.0,1.0
+Captaciones,CSUBS-25,Pozo N 25,Mataveri,-27.164441,-109.430554,53.0,,53.0,1.0,20.0,,48.0,1.0,1.0
+Captaciones,CSUBS-27,Pozo N 27,Mataveri,-27.165704,-109.423232,69.0,,69.0,1.0,20.0,,63.0,1.0,1.0
+Captaciones,CSUBS-28,Pozo N 28,Mataveri,-27.164977,-109.426591,71.0,,71.0,1.0,20.0,,56.0,1.0,1.0
+Captaciones,CSUBS-29,Pozo N 29,Hanga Roa,-27.162725,-109.420553,61.0,,61.0,1.0,20.0,,63.0,1.0,1.0
+Captaciones,CSUBS-31,Pozo N 31,Mataveri,-27.167874,-109.418891,78.0,,78.0,1.0,20.0,,84.0,1.0,1.0
+Captaciones,CSUBS-23,Pozo N 23,Vaitea,-27.125681,-109.342138,98.0,,98.0,1.0,20.0,,102.0,1.0,0.0
+Captaciones,CSUBS-26,Pozo N 26,La Colonia,-27.122452,-109.41526,64.0,,64.0,1.0,20.0,,68.0,1.0,0.0
+Estanques,ESARA-1,REG-ARA-EST-1,2.0,-27.149411,-109.415716,76.73,80.0,76.73,1.0,,250.0,,1.0,1.0
+Estanques,ESARA-2,REG-ARA-EST-2,2.0,-27.149359,-109.415835,76.48,80.0,76.48,1.0,,300.0,,1.0,1.0
+Estanques,ESPP-1,REG-PP-EST-1,2.0,-27.149376,-109.409032,116.93,150.0,116.93,2.0,,100.0,,1.0,1.0
+Estanques,ESPP-2,REG-PP-EST-2,2.0,-27.149206,-109.408983,116.65,155.0,116.65,1.0,,300.0,,1.0,1.0
+Estanques,ESRK-1,REG-RK-EST-1,2.0,-27.168371,-109.438013,80.2,110.0,80.2,1.0,,350.0,,1.0,1.0
+Estanques,ESRK-2,REG-RK-EST-2,2.0,-27.168324,-109.437871,80.4,125.0,80.4,1.0,,500.0,,1.0,1.0
+Estanques,ESVAI-1,REG-VAI-EST-1,2.0,-27.129253,-109.357743,93.81,97.0,93.81,1.0,,250.0,,1.0,0.0
+Estanques,ESLC-1,REG-LC-EST-1,2.0,-27.121745,-109.412543,151.54,155.0,151.54,1.0,,100.0,,1.0,0.0

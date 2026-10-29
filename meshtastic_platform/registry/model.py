@@ -32,7 +32,9 @@ KINDS = ("field", "bench", "historical")
 #           the mesh is configured here; the link to the PBX (serial module,
 #           Bluetooth) belongs to the PBX project.
 # gateway / receiver: listen-only sinks.
-FUNCTIONS = ("node", "pbx", "gateway", "receiver")
+# access:   a radio people reach the mesh through, from a phone or a PC. It is
+#           not measured, and nothing samples its track.
+FUNCTIONS = ("node", "pbx", "gateway", "receiver", "access")
 STATUSES = ("planned", "deployed", "fault", "retired")
 # Meshtastic Config.DeviceConfig.Role names.
 ROLES = ("CLIENT", "CLIENT_MUTE", "CLIENT_HIDDEN", "CLIENT_BASE", "ROUTER",
