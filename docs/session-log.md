@@ -20,6 +20,198 @@ Entry format:
 
 ---
 
+## 2026-10-29 — La guía SASIPA con la plantilla de trazabilidad
+**Time:** 12:40 (aprox)
+**User request:** aplicar a la guía `docs/sasipa-despliegue/` el estilo de
+documento de `trazabilidad_latex.zip` (copiado por el usuario a esa carpeta).
+
+### Actions taken
+- `main.tex`: `report` → `article` 11pt; portada de la plantilla (logo
+  `figuras/logo16.pdf`, título en tres líneas, centro, autor y cargo, fecha),
+  resumen entre `\hrulefill` con la tabla de alcance, índice.
+- `preambulo.tex`: márgenes, `setstretch{0.8}`, `parskip`, `float`, marcas
+  `\pendiente{}`/`\medir{}`/`\dms{}`; fuera `titlesec`. El recuadro
+  `pendiente` pasó a llamarse `abierto` (choque de nombres).
+- `secciones/`: chapter → section, section → subsection; "capítulo \ref" →
+  "sección \ref". Flotantes `[H]`.
+- `docs/diagrams/palette.tex`: nuevo `\paletteKeepFont`, que salta la elección
+  de Times; sin él (todos los diagramas) nada cambia.
+- Tres figuras ajustadas al ancho de Computer Modern (topología, procedimiento,
+  mensajería); `\figuranuestra` vuelve a interlineado 1.
+
+### Decisions
+- Tipografía de la plantilla (Computer Modern) en lugar de Times: es lo más
+  visible del estilo. Volver a Times es borrar `\def\paletteKeepFont{}`.
+- Escrito "Cyber-Physical" donde la plantilla dice "Ciber-Physical".
+- Anexos con la numeración por omisión de `article` (A, B, …).
+
+### Outcomes
+- `make` construye `guia-sasipa.pdf`, 24 páginas (eran 37), 1 aviso de caja
+  (el filete bajo el resumen, igual que en la plantilla).
+
+### Next steps / open questions
+- Ninguna marca `\pendiente{}` en el texto todavía: los puntos abiertos siguen
+  en recuadros `abierto`.
+
+### Más tarde: herramientas (13:10 aprox)
+- Pedido: listado de herramientas para armar el set-up; para la abrazadera
+  basta un destornillador, proponer uno.
+- `secciones/08-sitio.tex`, nueva §8.1 "Qué llevar": tabla banco/terreno
+  (`tab:herramientas`). Propuesto: **destornillador plano 6,5 × 150 mm**.
+  La abrazadera de stock del P1 Pro es de tornillo sinfín para postes de
+  70–100 mm (fuente de terceros: no se encontró guía de montaje de Seeed). La
+  ranura de su cabeza la toma cualquier punta plana; se descartó el de vaso
+  porque exige conocer la medida del hexágono, que nadie confirmó.
+- Dos `\pendiente{}` (primeras marcas rojas del documento): la medida real de
+  la cabeza del tornillo, y el herraje de las antenas fiberglass (si usan
+  abrazadera en U, hace falta una llave).
+
+---
+
+## 2026-10-28 — Guía de despliegue SASIPA en LaTeX
+**Time:** 16:40 (aprox)
+**User request:** generar un proyecto .tex dentro de `docs/`, gitignoreado, con
+una guía de despliegue y configuración para los nodos de SASIPA; el usuario
+provee diagramas y yo defino dónde van los suyos y los míos. Asumir que los
+mensajes de texto van por la app celular de Meshtastic; `meshpbx` lo integra
+él después.
+
+### Actions taken
+- Preguntado idioma y alcance antes de escribir (una sola interrupción): la
+  respuesta fue **español para el equipo CPS-RTC** y alcance **nodos + gateway +
+  mensajería**, dejando fuera R1/R2 y el estudio de canal.
+- Creado `docs/sasipa-despliegue/`: `main.tex`, `preambulo.tex`, `Makefile`,
+  `README.md`, 12 capítulos en `secciones/00..11`, 4 anexos `A..D` y 4 diagramas
+  TikZ en `figuras/`. Agregado `docs/sasipa-despliegue/` al `.gitignore` con el
+  mismo razonamiento que `report/`.
+- Todo valor citado se verificó contra el repositorio, no de memoria: salida real
+  de `configure.py show -d rapa-nui` y de `validate`, los siete pasos de
+  `provision/plan.py`, la tabla de invariantes del encabezado de
+  `registry/validate.py`, `.env.example`, `requirements.txt`.
+- El preámbulo hace `\input{../diagrams/palette}`: la guía usa la misma
+  tipografía y paleta que los diagramas del repo.
+
+### Decisions
+- **Las figuras tienen dos mecanismos distintos.** `\figuranuestra{}` hace
+  `\input` de un TikZ de `figuras/`; `\figurasasipa{}{}{}` deja un hueco que
+  en el PDF se ve como una caja punteada con la especificación de lo que debe
+  mostrar, y desaparece sola cuando aparece `figuras/<nombre>.pdf|.png`. Nadie
+  tiene que editar `.tex` para llenar un hueco. Rechazado dejar el hueco
+  invisible: un documento que esconde lo que le falta contradice la regla 9.
+- **La guía declara explícitamente que no es la fuente de verdad** y cada tabla
+  dice con qué comando se reproduce; el README lista los cuatro lugares a revisar
+  cuando cambie el registro.
+- babel-spanish no está instalado en esta máquina: el preámbulo lo usa si existe
+  y si no traduce los rótulos a mano, así que compila igual.
+
+### Outcomes
+- `make` construye `guia-sasipa.pdf`, 37 páginas, 5 avisos de caja menores.
+- 205 tests OK; `validate --all` ✓ en los seis deployments.
+- Dos hallazgos que la guía deja anotados como puntos abiertos, no resueltos por
+  mí: (1) **S1 se cumple a medias** — fiberglass {N1,N2,N6} y sensorizado
+  {N1,N2,N3} se solapan en dos unidades; el momento de corregirlo es al etiquetar
+  las unidades físicas, porque después es una visita a terreno. (2) **la
+  mensajería no se puede operar con el registro actual**: no hay radios de mano,
+  y las tres salidas (emparejarse al GW, emparejarse a un nodo en sitio, agregar
+  radios de mano) tienen costos distintos; emparejarse al GW contradice que sea
+  `CLIENT_MUTE`.
+
+### Next steps / open questions
+- El equipo decide S1 y si se agregan radios de mano al registro.
+- Las cuatro figuras del equipo: `mapa-sitios`, `sensecap-instalado`,
+  `perfiles-enlace`, `gateway-central`.
+- Si la guía se va a entregar a SASIPA y no solo al equipo, hay que reescribirla:
+  está en registro técnico, no en registro de terreno.
+
+---
+
+## 2026-10-28 — El pin manual del dashboard y un GPS que no fija
+**Time:** 18:40 (aprox)
+**User request:** (1) ¿dónde va el cambio para que el usuario del gateway pueda
+ubicar a mano las coordenadas de un nodo y poner un pin en el dashboard: en la
+plataforma o en el gateway? (2) "¿Seguro que se puede registrar mi posición
+dinámica con el GPS embebido de la radio? La dejé horas en una ventana abierta y
+no engancha ninguna constelación."
+
+### Actions taken
+- Revisado el gateway (submódulo, solo lectura): la función YA está construida.
+  `monitor/app.py:64-81` resuelve la posición por nodo como `surveyed` cuando
+  existe y, si no, la última reportada por GPS, con un campo `source` que dice
+  cuál es; `gateway/deployment.py:55` parsea `site.surveyed` ("for the
+  dashboard's map") y rechaza un lat/lon en 0 como "looks unset, not surveyed";
+  `monitor/templates/map.html` dibuja el marcador Leaflet y ya tiene escrito el
+  caso vacío.
+- Inventariado qué nodos tienen pin hoy: san-joaquin y san-joaquin-longturbo
+  1/2/3/p1/p2 sí; rapa-nui ninguno (los 9 bloques en null, regla 11); los `gw`
+  no (sin `node_id` y sin bloque `site`).
+- `docs/troubleshooting.md`: corregida la fila `0 fixes in M samples` (decía
+  "un cold start toma minutos", que es cierto para una placa sana y engañoso
+  para la falla que el usuario tiene) y agregada la subsección
+  "A GPS that never fixes" con la escalera de diagnóstico: `inspect` →
+  `--noproto` para ver el log del firmware → antena GPS en el u.FL → variante
+  de firmware (pines y riel del AXP192) → módulo u-blox falsificado.
+
+- Log del `--noproto` del usuario: `U-blox 6 detected`, soft 7.03 (45969), hard
+  00040007, `GNSS module config saved!`, y luego
+  `Publish pos@0:2, hasVal=0, Sats=0, GPSlock=0` con `lat=0 lon=0`. El módulo es
+  genuino y el firmware lo maneja: descarta módulo ausente, pines y variante.
+  Queda la cadena de RF (u.FL / antena) como sospechoso, a confirmar mirando si
+  `Sats` sube durante 10-15 min (el log mostrado era de 3 s después del boot).
+- `channel_study/track.py`: ese `lat=0 lon=0` es lo que publica el firmware sin
+  lock. Hoy la librería no entrega la clave `latitude` cuando vale 0 (proto3
+  omite defaults, `mesh_interface._fixupPosition`), así que el Tracker ya lo
+  contaba como `no_fix` por casualidad. Endurecido: (0, 0) se descarta explícito
+  y se cuenta aparte (`discarded_zero`, visible en los contadores y en
+  `session.json`). Test nuevo; 205 tests OK.
+- `docs/troubleshooting.md`: agregado "Reading the GPS log" — qué cierra el
+  `U-blox 6 detected` y por qué el contador `Sats` es el instrumento.
+- Segundo log (`message.txt`): el sniffer R1 (`!6c72f308`) está DECODIFICANDO la
+  malla del campus. `fr=0x0b64122b` es el nodo 1, `Use channel 0 (hash 0xec)` +
+  `Use AES256 key!` → la PSK de `telCPS_RTC` calza; `Portnum=3` POSITION con
+  `siv=18 pdop=98 msl=612`; `hopStart=2 HopLim=1 relay=0x2` → lo retransmitió el
+  nodo 2 (`!7c70da02`); `No rebroadcast: Role = CLIENT_MUTE` (I5 confirmado en
+  vivo). `rxSNR=-15` decodificado confirma SF alto: a MEDIUM_FAST (SF9, piso
+  -12.5 dB) ese paquete no habría pasado — evidencia independiente de que la
+  malla instalada es LONG_TURBO.
+- La posición que reporta el nodo 1 queda a 10.7 m del punto relevado en el
+  archivo (dlat -10.7 m, dlon -1.0 m): exactamente la lectura de error de GPS
+  que `registry/model.py` protege. NO se escribe `msl=612` en `surveyed`.
+- `docs/troubleshooting.md`: nueva sección "The radio drops packets before the
+  recorder sees them" por el `WARN [Router] ToPhone queue is full, drop packet`
+  del log — bajo `--noproto` es esperable (no hay cliente drenando), pero
+  grabando es el único error de medición que los datos no pueden delatar: se ve
+  como pérdida de canal en `gaps.csv`.
+
+### Decisions
+- El pin manual se escribe en `deployments/<mesh>.yaml` → `site.surveyed`, en la
+  plataforma, y el gateway lo lee de su copia idéntica. **Rechazado:** darle al
+  dashboard una UI para arrastrar el pin y guardarlo en su base — crea una
+  segunda fuente de verdad para dónde está un nodo y rompe la propiedad que
+  `registry/model.py:76-85` protege (la diferencia entre `surveyed` y lo que el
+  nodo reporta se lee como error de GPS). Si se quiere ayuda en el mapa, que
+  imprima el snippet YAML para pegar en el archivo.
+- Horas sin fix se trata como falla de hardware/configuración, no como
+  geometría: el síntoma se separa con el log del firmware (`--noproto`), que
+  distingue "módulo no detectado" de "módulo sin cielo".
+
+### Outcomes
+- Nada que construir para el pin: es dato (llenar `surveyed`) más la copia a
+  mano al gateway (regla 2).
+- Entrada de troubleshooting reescrita por síntoma.
+
+### Next steps / open questions
+- Resultado de `meshtastic --port <port> --noproto` en la T-Beam del sniffer:
+  decide si el módulo GPS existe o no para el firmware.
+- Si el GPS está muerto: evaluar la posición provista por el teléfono vía BLE
+  (el firmware la adopta como propia y `getMyNodeInfo()["position"]` la
+  entrega, sin tocar código), teniendo en cuenta que entonces `sats_in_view`
+  viene vacío y `gps_time` es del teléfono — la lógica de `repeated` depende de
+  que ese timestamp avance.
+- Agregar bloque `site` al `gw` de San Joaquín cuando se sepa dónde queda la
+  Raspberry.
+
+---
+
 ## 2026-10-28 — Sniffer del campus San Joaquín: deployment del estado instalado
 **Time:** 10:30 (aprox)
 **User request:** probar la grabación de coordenadas GPS con una LILYGO conectada
@@ -91,6 +283,61 @@ Joaquín. "Todos los datos están en el proyecto viejo."
 
 ---
 
+## 2026-10-30 — Rapa Nui: perfil de terreno, antenas, BLE
+**Time:** 11:00 (aprox)
+**User request:** (1) análisis de parámetros óptimos para `rapa-nui` a partir de
+un perfil de heywhatsthat entre dos puntos; (2) luego: dejar `hop_limit` en 3,
+antena de fibra para N2, N5 y N6, `tx_power` 30 dBm en MEDIUM_FAST, y BLE activo.
+
+### Actions taken
+- Los dos puntos del enlace son N1 (ESRK-1) y GW/N6 (Central SASIPA). Como la
+  página renderiza en el navegador, el perfil se reconstruyó con SRTM 30 m
+  (OpenTopoData, la misma fuente que ya usa el archivo en `alt_source`): 1.488 m,
+  86 → 36 m, F1 = 8,5 m en el peor punto; 93 % de F1 con 3 m/3 m de antena y
+  126 % con el GW a 6 m. Margen de enlace 63 dB en MEDIUM_FAST.
+- Mismo análisis sobre los ocho enlaces candidatos: todos los nodos tienen
+  línea de vista al gateway; los bloqueados son nodo-a-nodo (N2–N1 −204 % de F1,
+  N4–N5 −57 %). Airtime originado de los seis nodos a 120 s: 1,63 % en
+  MEDIUM_FAST contra 3,84 % (LONG_TURBO) y 5,68 % (LONG_FAST).
+- `deployments/rapa-nui.yaml`: la antena de fibra pasa de N1 a N5, así el juego
+  de tres queda en N2, N5 y N6 (N1, N3, N4 con la goma de fábrica).
+- BLE: `provision` no escribía `bluetooth.*` en ninguna radio. Se agregó
+  `plan.bluetooth_settings()` en espejo de `serial_settings()` — escribe
+  `bluetooth.enabled true` en toda radio que no sea `pbx` —, el chequeo
+  correspondiente en el inspector, dos tests y la fila en la tabla del README.
+
+### Decisions
+- BLE se escribe, no se asume: una radio reusada del proyecto PBX llega con
+  Bluetooth apagado (`BLUETOOTH_ENABLE = False` en meshpbx), y sin esto el
+  provisioning no lo devolvía. En una radio `pbx` se sigue sin tocar (ADR-0002).
+- `hop_limit` queda en 3 por decisión del usuario, pese a que el terreno dice
+  que la malla es una estrella sobre el gateway y que 2 bastaría.
+- `tx_power_dbm: 30`: planteadas tres salidas (22 dBm derivado / antena de
+  8 dBi para llegar a 30 dBm EIRP / dejar 30 literal), el usuario eligió dejar
+  **30 literal**. Como eso choca con la regla dura 5, se implementó una
+  excepción explícita en vez de borrar el chequeo: `radio.tx_power_policy`,
+  `derived` (default, sin cambios para el resto de los despliegues) o
+  `declared`. Con `declared` el número del archivo es el que `provision`
+  escribe —antes se escribía siempre el derivado, así que el 30 ni siquiera
+  habría llegado a la radio— y los tres chequeos V2 pasan de error a warning
+  que se imprime en cada corrida. `rapa-nui` lo declara con un comentario que
+  deja constancia de la decisión y de que el firmware recorta a 22 dBm.
+- Archivos tocados por eso: `radio/profile.py` (campo + propiedad),
+  `registry/{model,loader,validate}.py`, `configure.py` (la etiqueta decía
+  "(derived)" siempre), README y la regla dura 5 de CLAUDE.md, más tres tests
+  nuevos.
+
+### Outcomes
+- Antenas, BLE y `tx_power_policy` aplicados. `validate --all`: los seis
+  despliegues en verde. Suite: 209 tests, OK.
+- `rapa-nui` queda con `hop_limit 3`, fibra en N2/N5/N6, `tx_power_dbm 30`
+  declarado (la radio emitirá 22) y BLE encendido en toda radio no-`pbx`.
+
+### Next steps / open questions
+- Al inspeccionar en terreno, `lora.tx_power` va a leer 22 y el reporte va a
+  marcar diferencia contra el 30 declarado: es lo esperado, no un defecto.
+- Medir `hop_start − hop_limit` en el gateway para confirmar si 3 saltos se usan.
+
 ## 2026-10-27 — Diagramas de retransmisión y acceso al canal (CSMA/CA)
 **Time:** 17:10 (aprox)
 **User request:** Pegó las ecuaciones del algoritmo de retransmisión y del
@@ -111,9 +358,35 @@ utilización) y pidió un diagrama detallado, con buena nomenclatura de variable
 - Creados dos diagramas TikZ en `docs/diagrams/` (mismo patrón que
   `membership.tex`: `palette.tex` + `build.sh`), construidos a PNG y PDF:
   `rebroadcast.tex` (pipeline de decisión de retransmisión, con la rama de
-  duplicados) y `channel-access.tex` (panel A: lazo backoff + CAD; panel B:
-  todas las ecuaciones; panel C: las ventanas sobre el eje de tiempo más las
-  dos tablas numéricas).
+  duplicados) y `channel-access.tex` (lazo backoff + CAD, ecuaciones y
+  ventanas sobre el eje de tiempo).
+- A pedido del usuario (misma sesión, 2026-10-28), `channel-access.tex` se
+  dividió en tres figuras independientes y se borró la combinada:
+  `channel-access-loop` (el lazo del MAC, con δ = kσ en grande dentro de la
+  caja del sorteo), `channel-access-model` (todas las ecuaciones) y
+  `channel-access-window` (las ventanas sobre el eje de tiempo + las dos
+  tablas). Cada una lleva su propia nota de procedencia del firmware, salvo
+  `channel-access-loop`: ahí la caja del sorteo muestra solo δ = kσ y la nota
+  de constantes se sacó, porque ninguna de ellas aparece en esa figura.
+- El camino de interrupciones del transceptor se agregó y, a pedido del
+  usuario, terminó en su propia figura: ahora son cuatro.
+  `channel-access-loop` queda de alto nivel (el viaje del paquete), con las dos
+  cajas de sensado anotadas con la señal que realmente leen —
+  `isActivelyReceiving()` consulta por SPI los flags `PREAMBLE_DETECTED` /
+  `HEADER_VALID` del SX1262 (no están cableados a DIO1), con sus timeouts de
+  falsa detección; `isChannelActive()` es `scanChannel()` en modo CAD.
+  `channel-access-irq` es la de bajo nivel: DIO1 (`RxDone`/`TxDone`) →
+  `isrLevel0Common()` (`disableInterrupt` + `notifyFromISR`) → `onNotify()` con
+  sus tres causas, el temporizador `notifyLater(δ)`, el armado
+  `startSend()`/`startReceive()` → `isrTxLevel0`/`isrRxLevel0`, y dónde se
+  alimenta `U_ch` (`RX_ALL_LOG`, `RX_LOG`, `TX_LOG`). Se agregó además
+  `channel-access-trip`: el mismo lazo sin los recuadros de sensado ni las
+  notas, para una lámina o una primera mención en el texto. En
+  `channel-access-model` se sacó la función `map()` de Arduino: el exponente w
+  ahora se presenta como la interpolación lineal entera que es, con su forma
+  cerrada por caso. Corrección de la versión
+  anterior: el ToA se contabiliza en `U_ch` en `completeSending()`, al llegar la
+  interrupción de Tx, no en `startSend()`.
 
 ### Decisions
 - **Correcciones a las ecuaciones pegadas** (todas verificadas en el firmware
@@ -130,8 +403,12 @@ utilización) y pidió un diagrama detallado, con buena nomenclatura de variable
 - No se tocó `report/es/02` §4: ya estaba correcto y las cifras coinciden.
 
 ### Outcomes
-- `docs/diagrams/rebroadcast.{tex,png,pdf}` y
-  `docs/diagrams/channel-access.{tex,png,pdf}` construidos y revisados.
+- `docs/diagrams/rebroadcast.{tex,png,pdf}`,
+  `docs/diagrams/channel-access-loop.{tex,png,pdf}`,
+  `docs/diagrams/channel-access-trip.{tex,png,pdf}`,
+  `docs/diagrams/channel-access-irq.{tex,png,pdf}`,
+  `docs/diagrams/channel-access-model.{tex,png,pdf}` y
+  `docs/diagrams/channel-access-window.{tex,png,pdf}` construidos y revisados.
 
 ### Next steps / open questions
 - Si el informe los usa, decidir si las etiquetas se traducen al español para
