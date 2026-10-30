@@ -373,6 +373,16 @@ class TestTrack(unittest.TestCase):
         self.assertEqual((tr.stats.fixes, tr.stats.repeated), (3, 1))
         self.assertIn("1 repeated the previous fix", tr.counters_lines()[0])
 
+    def test_zero_zero_is_no_lock_not_a_point_in_the_gulf_of_guinea(self):
+        # The firmware publishes lat=0 lon=0 while it has no lock ("Publish
+        # pos@0:2, hasVal=0, Sats=0, GPSlock=0"). Recording that would draw a
+        # track to Null Island and call the session positioned.
+        tr = self.tracker()
+        self.assertIsNone(tr.sample({"latitude": 0, "longitude": 0, "time": 1_793_210_739},
+                                    mono=100.0, wall=1000.0))
+        self.assertEqual((tr.stats.fixes, tr.stats.no_fix, tr.stats.discarded_zero), (0, 1, 1))
+        self.assertIn("of them at (0, 0)", tr.counters_lines()[0])
+
     def test_standing_still_with_a_live_gps_is_not_a_repeated_fix(self):
         # Same coordinates, newer timestamp: the GPS is working and the receiver
         # is parked. Marking that as repeated would hide the real failure.

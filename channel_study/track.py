@@ -17,6 +17,11 @@ So the track has two cadences, deliberately separate:
 * `--track-secs` on the command line — a property of the laptop doing the
   recording, like `--port`, costing nothing and recorded in `session.json`.
 
+A radio with no lock publishes `lat=0 lon=0` to its own log, so (0, 0) is
+treated as the absence of a fix and counted apart: the library drops a zero
+latitude from the position dictionary today (proto3 omits defaults), but Null
+Island is one library change away from being recorded as a real point.
+
 A sample with no fix is counted, and one identical to the previous fix — same
 coordinates AND same GPS timestamp, so nothing new arrived — is marked
 (`repeated`) rather than smoothed away. A receiver standing still with a live
@@ -48,6 +53,7 @@ class TrackStats:
     fixes: int = 0          # reads that carried latitude and longitude
     repeated: int = 0       # fixes identical to the previous one
     no_fix: int = 0         # reads with no position at all
+    discarded_zero: int = 0  # reads reporting (0, 0): no lock, not the Gulf of Guinea
     errors: int = 0         # reads that raised (counted by the caller)
 
 
@@ -83,6 +89,11 @@ class Tracker:
         pos = position or {}
         lat, lon = pos.get("latitude"), pos.get("longitude")
         if lat is None or lon is None:
+            self.stats.no_fix += 1
+            return None
+        if lat == 0 and lon == 0:
+            # What the firmware itself publishes while it has no lock.
+            self.stats.discarded_zero += 1
             self.stats.no_fix += 1
             return None
         key = (lat, lon, pos.get("time"))
@@ -121,7 +132,7 @@ class Tracker:
             return []
         s = self.stats
         line = f"own position: {s.fixes} fixes in {s.samples} samples every {self.interval:g} s"
-        extra = {"no fix": s.no_fix, "repeated the previous fix": s.repeated,
-                 "read errors": s.errors}
+        extra = {"no fix": s.no_fix, "of them at (0, 0)": s.discarded_zero,
+                 "repeated the previous fix": s.repeated, "read errors": s.errors}
         tail = ", ".join(f"{v} {k}" for k, v in extra.items() if v)
         return [line + (f" ({tail})" if tail else "")]

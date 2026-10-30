@@ -22,6 +22,7 @@ entries (broker credentials, containers, database timestamps) moved to
 | Serial port busy, or the board reboots when you connect | [Serial port contention](#serial-port-contention) |
 | `WriteFile failed` / `Aborting due to` on the last step | [The reboot step fails on Windows](#the-reboot-step-fails-on-windows) |
 | `track.csv` is missing, empty, or always the same point | [The GPS track is empty or frozen](#the-gps-track-is-empty-or-frozen) |
+| `ToPhone queue is full, drop packet` in the device log | [The radio drops packets before the recorder sees them](#the-radio-drops-packets-before-the-recorder-sees-them) |
 
 ---
 
@@ -288,10 +289,54 @@ the counters printed on Ctrl+C — `own position: N fixes in M samples every 30 
 |---|---|
 | No `track.csv` at all | No `--csv`/`--jsonl`: a track has nowhere to go. Or `--track-secs 0`. |
 | `WARNING: --track-secs is set but this radio's position.gps_mode is DISABLED` | The receiver's entry declares no `position` flow, so `provision` turned the GPS off (`position_settings`). Declare one and re-provision. |
-| `0 fixes in M samples` | The GPS is on but has no fix: a LILYGO indoors never gets one. Take it outside with a view of the sky; a cold start takes minutes. |
+| `0 fixes in M samples` | The GPS is on but has no fix. Minutes of this is normal: a cold start needs open sky, and indoors a LILYGO never gets one. Tens of minutes under open sky, or hours at a window, is a fault — see [A GPS that never fixes](#a-gps-that-never-fixes). |
 | Every row `repeated=1` | Nothing new is arriving: the radio keeps handing over the identical fix, GPS timestamp included — its GPS stopped updating, or it lost the fix and kept the last one. A receiver that is merely parked is NOT marked, because its timestamp advances. `position.gps_update_interval` is 30 s on a receiver, so a `--track-secs` shorter than that repeats by construction. |
 | `read errors` in the counters | The serial link failed mid-session. The packets in the same session are fine; the track has holes. |
 | `gps_mode is NOT_PRESENT` | That board has no GPS chip at all. Do not declare a position flow for it; record its point in `site` instead. |
+
+**A GPS that never fixes.** A healthy NEO-6M cold-starts in a few minutes with
+half the sky in view, so hours without a fix is not a weak-signal problem. Work
+from the cheapest check to the most expensive:
+
+1. `python configure.py inspect -d <deployment> --port <port>`. If
+   `position.gps_mode` reads `NOT_PRESENT`, the firmware probed the GPS UART at
+   boot and found nothing. Forcing it to `ENABLED` changes nothing: the module
+   is unreachable, not idle.
+2. `meshtastic --port <port> --noproto` leaves the serial line in dumb mode
+   printing the device's own log, and the boot lines say whether the GPS was
+   detected and at what baud rate. This is the one check that separates "no
+   module" from "module with no sky"; everything below is only worth doing once
+   it has answered.
+3. The GPS antenna. Several LILYGO T-Beam revisions bring the GPS out to a u.FL
+   connector and ship the small ceramic antenna loose in the box; with that
+   connector empty the module never fixes, window or not. Check too that the
+   LoRa and GPS antennas are not swapped — the board is happy either way and
+   says nothing.
+4. The firmware variant. The T-Beam exists in revisions whose GPS sits on
+   different pins and, on the AXP192 boards, behind a power rail the firmware
+   has to switch on. The wrong variant gives exactly this symptom: radio fine,
+   GPS absent. `lilygo_tbeam_sx1276` takes the `TBEAM` target
+   (`registry/hardware.py`); see [flashing.md](flashing.md).
+5. A counterfeit module. Cheap T-Beams have shipped with fake u-blox GPSs that
+   never fix or need very long cold starts. If the log shows the module
+   detected, the antenna is connected and half an hour of open sky still gives
+   nothing, suspect the chip: record that node's point in `site` instead and
+   stop declaring a position flow for it.
+
+**Reading the GPS log.** `U-blox 6 detected`, with a soft and hard version
+printed above it and `GNSS module config saved!` below, settles 1, 2, 4 and 5 at
+once: the module is genuine, the pins are right and the firmware is driving it.
+What matters after that is the satellite count in the line the GPS repeats,
+`Publish pos@... hasVal=0, Sats=0, GPSlock=0`. Watch it for ten or fifteen
+minutes, not three seconds — `Sats=0` right after boot means nothing. A count
+that climbs (1, 3, 5...) and no lock is sky: wait, or go outside. A count nailed
+to 0 for a quarter of an hour, with the module detected, is the antenna path —
+the u.FL unseated, the antenna broken, or the wrong one fitted — not the sky and
+not the firmware. `lat=0 lon=0` in those lines is the firmware saying it has no
+lock, which is why the tracker discards (0, 0) and counts it.
+
+Until the hardware is settled, record with `--track-secs 0`. The packet data
+does not depend on the GPS, and the channel study loses nothing but the map.
 
 **A radio that arrives with a fixed position.** The Meshtastic CLI turns
 `position.fixed_position` on implicitly whenever someone sets a latitude and
@@ -306,6 +351,33 @@ What does cost airtime is the `position` flow itself, which is why it is
 normally declared long (one packet an hour) while `--track-secs` stays short.
 
 ---
+
+## The radio drops packets before the recorder sees them
+
+**Symptom.** The device's own log (`meshtastic --port <port> --noproto`) shows
+
+```
+WARN | [Router] ToPhone queue is full, drop packet
+```
+
+**What it means.** The firmware buffers packets destined for its client — our
+receiver — in a bounded queue and drops the oldest when nobody drains it. Those
+packets were demodulated correctly and are lost between the radio and the
+recorder, so they are invisible to `receiver.py`: they appear as channel loss in
+`gaps.csv` and depress the delivery ratio, when nothing was lost on the air.
+This is the one measurement error in the channel study that the data cannot
+reveal on its own.
+
+**Under `--noproto` it is expected**: that mode deliberately does not start the
+API, so no client drains the queue and the warning is the queue doing its job.
+Use `--noproto` to read the radio's log, never while recording.
+
+**While recording it is a fault.** Check, in this order, that nothing else holds
+the port (see [Serial port contention](#serial-port-contention)), that the
+receiver process is not blocked — a sink writing to a slow or full disk stalls
+the read loop — and that the machine is not swapping. If a session logged this
+warning, say so in the session notes: the delivery figures for that run are a
+lower bound, not a measurement.
 
 ## Serial port contention
 
