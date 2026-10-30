@@ -11,6 +11,7 @@ later.
 | V1  | node_id unique and shaped '!' + 8 hex; refs/labels unique      |
 | V2  | tx_power within the chip's valid settings and the declared     |
 |     | EIRP cap, and equal to what the deployment's policy derives    |
+|     | (warnings instead, under radio.tx_power_policy: declared)      |
 | V3  | intervals declare exactly the kinds the node emits             |
 | V3b | no environment sensor <=> no 'environment' cadence             |
 | V4  | antenna declared, and its band covers the channel              |
@@ -257,15 +258,24 @@ def _node(c: _Collector, reg: Registry, n: Node, profile, seen) -> None:
         else:
             eirp = regulatory.eirp_dbm(n.tx_power_dbm, a.gain_dbi)
             cap = profile.eirp_cap_dbm
+            # "declared" hands the choice to the file: the deviations are still
+            # reported, every run, but they no longer refuse the deployment.
+            declared = reg.radio.tx_power_policy == "declared"
             if cap is not None and eirp > cap:
-                level = c.warn if m.kind == "historical" else c.error
+                level = c.warn if (m.kind == "historical" or declared) else c.error
                 level("V2", r, f"EIRP {eirp:g} dBm ({n.tx_power_dbm} dBm + {a.gain_dbi:g} dBi) "
                                f"exceeds the cap ({profile.band.describe()})")
             chip = n.chip
             if not chip.valid(n.tx_power_dbm):
                 excl = f" except {sorted(chip.invalid)}" if chip.invalid else ""
-                c.error("V2", r, f"tx_power {n.tx_power_dbm} dBm is not a valid {chip.name} "
-                                 f"setting ({chip.min_dbm}..{chip.max_dbm}{excl})")
+                msg = (f"tx_power {n.tx_power_dbm} dBm is not a valid {chip.name} "
+                       f"setting ({chip.min_dbm}..{chip.max_dbm}{excl})")
+                if declared:
+                    c.warn("V2", r, f"{msg}: it is written to the radio as declared, and the "
+                                    f"firmware clamps it to {chip.max_dbm} dBm — inspect will "
+                                    f"keep reporting the difference")
+                else:
+                    c.error("V2", r, msg)
             try:
                 expected = reg.expected_tx_power(n)
             except ValueError as exc:
@@ -279,8 +289,9 @@ def _node(c: _Collector, reg: Registry, n: Node, profile, seen) -> None:
                     why = f"no EIRP cap declared: the {chip.name} maximum"
                 else:
                     why = f"derived from {a.gain_dbi:g} dBi under {profile.band.describe()}"
-                c.error("V2", r, f"tx_power_dbm is {n.tx_power_dbm}, policy requires "
-                                 f"{expected} ({why})")
+                level = c.warn if declared else c.error
+                level("V2", r, f"tx_power_dbm is {n.tx_power_dbm}, policy requires "
+                               f"{expected} ({why})")
 
     # V6 — position before deployment
     surveyed = n.site.surveyed if n.site else None

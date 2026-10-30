@@ -113,6 +113,14 @@ The transmit power is not typed by hand (check SUBTEL regulations in Chile): it 
 the power limit of the band the slot falls in, and the radio chip's valid
 settings, and `validate` refuses a value that differs.
 
+A deployment that needs the number in the file to win instead says so in its
+`radio` block: `tx_power_policy: declared` writes each node's `tx_power_dbm` to
+the radio as it stands, and the V2 checks (EIRP cap, chip range, derived value)
+become warnings that `validate`, `show` and `provision` print on every run
+rather than errors that stop them. The firmware still clamps a setting the chip
+cannot reach, and `inspect` keeps reporting that difference. The default is
+`derived`.
+
 ## Mesh membership: what gets configured on a radio
 
 `provision` writes a radio's **membership** in the mesh: everything that makes
@@ -138,10 +146,11 @@ The decision, the PBX connection in detail and a worked example:
 | `lora.sx126x_rx_boosted_gain` | `radio.rx_boosted_gain` | Extra receive sensitivity, SX126x chips only |
 | `device.role` | node `role` | `CLIENT`: reports and relays. `CLIENT_MUTE`: never relays others' packets (gateway, receiver) |
 | `lora.hop_limit` | node `hop_limit` | How many times a packet it sends may be relayed |
-| `lora.tx_power` | derived | See above |
+| `lora.tx_power` | derived, or node `tx_power_dbm` under `radio.tx_power_policy: declared` | See above |
 | `telemetry.*` | node `intervals`, `sensors` | Device telemetry (battery, voltage, channel use, airtime) and environment telemetry (only with a sensor), each at its cadence |
 | `position.*` | node `intervals.position` | GPS on and the position broadcast at that cadence, or GPS off with no flow declared. Always written off: smart (movement-triggered) broadcast, and `fixed_position`, which makes a radio report stored coordinates instead of its fix. The local fix interval follows mobility — 30 s on a receiver, one hour on anything bolted to a post — and costs no airtime |
 | `serial.enabled` | node `function` | Off on every radio except `pbx` ones, whose serial link and Bluetooth are never touched here |
+| `bluetooth.enabled` | node `function` | On, so a phone or a laptop can reach the radio over BLE — written, not assumed, because a radio reused from a PBX arrives with it off. Never touched on a `pbx` radio |
 
 A position is never written to a radio: the surveyed site is a record in the
 file, compared later with what the GPS reports.

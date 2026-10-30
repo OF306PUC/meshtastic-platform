@@ -35,6 +35,10 @@ KINDS = ("field", "bench", "historical")
 # access:   a radio people reach the mesh through, from a phone or a PC. It is
 #           not measured, and nothing samples its track.
 FUNCTIONS = ("node", "pbx", "gateway", "receiver", "access")
+# How tx_power is decided (radio.tx_power_policy). "derived" is the rule:
+# antenna gain + EIRP cap + chip. "declared" hands the choice to the file and
+# downgrades every V2 tx_power error to a warning.
+TX_POWER_POLICIES = ("derived", "declared")
 STATUSES = ("planned", "deployed", "fault", "retired")
 # Meshtastic Config.DeviceConfig.Role names.
 ROLES = ("CLIENT", "CLIENT_MUTE", "CLIENT_HIDDEN", "CLIENT_BASE", "ROUTER",
@@ -206,12 +210,16 @@ class Registry:
     def expected_tx_power(self, node: Node) -> int | None:
         """tx_power this deployment's policy requires of a node, or None.
 
-        field: derived from the antenna gain and the declared EIRP cap.
+        field: derived from the antenna gain and the declared EIRP cap, unless
+          radio.tx_power_policy is "declared" — then the node's own number is
+          the policy, and it is what provisioning writes.
         bench: the chip minimum, whatever the antenna.
         historical: nothing is required; the record is what it was.
         """
         if self.meta.kind == "bench":
             return node.chip.min_dbm
+        if self.radio.tx_power_policy == "declared":
+            return node.tx_power_dbm
         if self.meta.kind == "field" and node.antenna is not None:
             return regulatory.derive_tx_power(node.antenna.gain_dbi,
                                               self.radio.eirp_cap_dbm, node.chip)

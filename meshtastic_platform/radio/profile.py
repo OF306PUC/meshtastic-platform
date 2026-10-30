@@ -65,6 +65,11 @@ class RadioSpec:
     position_precision: int
     rx_boosted_gain: bool
     eirp_caps: tuple[regulatory.Band, ...]
+    # "derived" (the default): tx_power comes from the antenna gain, the caps
+    # and the chip, and a node's tx_power_dbm must equal it. "declared": the
+    # number in the file is written to the radio as it stands, and V2 reports
+    # every deviation as a warning instead of refusing the file.
+    tx_power_policy: str = "derived"
 
 
 @dataclass(frozen=True)
@@ -85,6 +90,10 @@ class RadioProfile:
     @property
     def channels(self) -> tuple[Channel, ...]:
         return self.spec.channels
+
+    @property
+    def tx_power_policy(self) -> str:
+        return self.spec.tx_power_policy
 
     @property
     def primary_channel(self) -> Channel:

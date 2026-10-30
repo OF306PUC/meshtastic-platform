@@ -23,7 +23,7 @@ from meshtastic_platform.decode import FLOW_KINDS
 from meshtastic_platform.radio.profile import Channel, RadioSpec
 from meshtastic_platform.radio.regulatory import Band
 from meshtastic_platform.registry.model import (
-    Antenna, Meta, Node, Pbx, Position, Registry, Sensor, Site,
+    TX_POWER_POLICIES, Antenna, Meta, Node, Pbx, Position, Registry, Sensor, Site,
 )
 
 ENV_DEPLOYMENT = "MESH_DEPLOYMENT"
@@ -291,7 +291,7 @@ def _node(r: _Reader, raw, where) -> Node | None:
 _META_KEYS = {"deployment", "kind", "description", "firmware_target", "cadence_scale"}
 _META_REQUIRED = {"deployment", "kind"}
 _RADIO_KEYS = {"region", "modem_preset", "channel_num", "channels", "rebroadcast_mode",
-               "position_precision", "rx_boosted_gain", "eirp_caps"}
+               "position_precision", "rx_boosted_gain", "eirp_caps", "tx_power_policy"}
 _RADIO_REQUIRED = {"region", "modem_preset", "channels", "rebroadcast_mode",
                    "position_precision", "rx_boosted_gain"}
 
@@ -343,6 +343,11 @@ def _radio(r: _Reader, raw) -> RadioSpec | None:
                                      r.get(c, "label", w, str) or ""))
     precision = r.get(d, "position_precision", "radio", int, nullable=False)
     boosted = r.get(d, "rx_boosted_gain", "radio", bool, nullable=False)
+    policy = r.get(d, "tx_power_policy", "radio", str) or "derived"
+    if policy not in TX_POWER_POLICIES:
+        r.problems.append(f"radio.tx_power_policy: {policy!r} is not one of "
+                          f"{sorted(TX_POWER_POLICIES)}")
+        policy = "derived"
     return RadioSpec(
         region=r.get(d, "region", "radio", str, nullable=False) or "",
         modem_preset=r.get(d, "modem_preset", "radio", str, nullable=False) or "",
@@ -352,6 +357,7 @@ def _radio(r: _Reader, raw) -> RadioSpec | None:
         position_precision=precision if precision is not None else 0,
         rx_boosted_gain=bool(boosted),
         eirp_caps=tuple(caps) if caps is not None else None,
+        tx_power_policy=policy,
     )
 
 

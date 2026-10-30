@@ -246,6 +246,22 @@ class TestInvariants(unittest.TestCase):
         self.assertIn("V2", self.mutate(lambda d: d["nodes"][1].update(tx_power_dbm=21)))
         self.assertIn("V2", self.mutate(lambda d: d["nodes"][1].update(tx_power_dbm=None)))
 
+    def test_V2_declared_policy_warns_instead_of_refusing(self):
+        """tx_power_policy: declared — the deviations are reported, not fatal."""
+        def declared(d):
+            d["radio"]["tx_power_policy"] = "declared"
+            d["nodes"][0]["tx_power_dbm"] = 30        # over the cap AND off the sx1262 range
+        data = field_registry()
+        declared(data)
+        self.assertEqual(codes(data), set())
+        self.assertIn("V2", codes(data, level="warning"))
+
+    def test_V2_an_unknown_tx_power_policy_is_refused(self):
+        data = field_registry()
+        data["radio"]["tx_power_policy"] = "whatever"
+        with self.assertRaises(Exception):
+            parse(data)
+
     def test_V2_sx1276_refuses_18_and_19(self):
         self.assertIn("V2", self.mutate(lambda d: d["nodes"][3].update(tx_power_dbm=19)))
         self.assertIn("V2", self.mutate(lambda d: d["nodes"][3].update(tx_power_dbm=22)))

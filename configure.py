@@ -143,7 +143,7 @@ def cmd_provision(args) -> int:
 
     print(f"{reg.name}: provisioning {node.ref} ({node.function}, {node.role})")
     print(f"  {reg.radio.describe()}")
-    print(f"  tx_power {reg.expected_tx_power(node)} dBm (derived), "
+    print(f"  tx_power {reg.expected_tx_power(node)} dBm ({reg.radio.tx_power_policy}), "
           f"cadences {reg.intervals(node) or 'none'}\n")
 
     # Identify the device before writing anything; stop on any doubt.

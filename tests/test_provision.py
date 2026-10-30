@@ -149,6 +149,13 @@ class TestNodePlan(unittest.TestCase):
         self.assertNotIn("BBBB", shown)
         self.assertIn("AAAA", " ".join(" ".join(s.argv) for s in steps))
 
+    def test_a_declared_tx_power_is_written_as_it_stands(self):
+        """radio.tx_power_policy: declared — the file's number reaches the radio."""
+        data = field_registry()
+        data["radio"]["tx_power_policy"] = "declared"
+        data["nodes"][0]["tx_power_dbm"] = 30
+        self.assertEqual(flags(self.plan_for("N1", parse(data)))["lora.tx_power"], "30")
+
     def test_bench_runs_at_the_chip_minimum(self):
         reg = parse(bench(field_registry()))
         self.assertEqual(flags(self.plan_for("N1", reg))["lora.tx_power"], "-9")   # SX1262
