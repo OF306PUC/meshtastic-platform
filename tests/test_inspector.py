@@ -160,6 +160,10 @@ class TestDrift(unittest.TestCase):
     def test_a_serial_module_left_on(self):
         self.assertCaught(healthy(**{"serial.enabled": True}), "serial.enabled")
 
+    def test_bluetooth_switched_off(self):
+        """A radio reused from a PBX comes back with BLE off: no phone reaches it."""
+        self.assertCaught(healthy(**{"bluetooth.enabled": False}), "bluetooth.enabled")
+
     def test_a_pbx_radio_is_checked_for_membership_not_for_its_link(self):
         data = field_registry()
         data["nodes"].append(pbx_radio("P1", node_id="!1234abcd", firmware="2.7.26"))

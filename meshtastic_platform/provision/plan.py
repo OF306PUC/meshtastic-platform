@@ -142,6 +142,17 @@ def serial_settings(node: Node) -> list[tuple[str, str]]:
     return [] if node.function == "pbx" else [("serial.enabled", "false")]
 
 
+def bluetooth_settings(node: Node) -> list[tuple[str, str]]:
+    """Bluetooth: on, except on a pbx radio, where it is not touched.
+
+    BLE is how a phone or a laptop reaches a radio, so it is written on rather
+    than assumed: a radio reused from a PBX arrives with Bluetooth off, because
+    there the nRF52840 serves the BLE side instead. On a pbx radio it stays the
+    PBX project's to configure, like the serial module above.
+    """
+    return [] if node.function == "pbx" else [("bluetooth.enabled", "true")]
+
+
 def _sets(cmd: list[str], settings: list[tuple[str, str]]) -> list[str]:
     argv = list(cmd)
     for key, value in settings:
@@ -184,5 +195,6 @@ def node_steps(reg: Registry, node: Node, port: str | None,
         Step("telemetry", _sets(cmd, telemetry_settings(reg, node))),
         Step("GPS / position", _sets(cmd, position_settings(reg, node))),
         *([Step("serial", _sets(cmd, serial))] if (serial := serial_settings(node)) else []),
+        *([Step("bluetooth", _sets(cmd, bt))] if (bt := bluetooth_settings(node)) else []),
         Step("reboot", cmd + ["--reboot"]),
     ]

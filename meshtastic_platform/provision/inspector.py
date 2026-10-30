@@ -12,7 +12,7 @@ Connects to a node over serial and reports, in one pass:
                     no channel the deployment does not declare. PSKs are
                     compared, never printed.
   4. Registry       the local node vs its registry entry: role, hop_limit,
-                    tx_power (derived) and EIRP vs the declared cap, cadences
+                    tx_power (per radio.tx_power_policy) and EIRP vs the cap, cadences
                     (the PDR estimator's denominators), sensors vs environment
                     telemetry, GPS vs declared position flow, smart position
                     and fixed_position off, firmware, hardware model.
@@ -31,7 +31,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from meshtastic_platform.provision.identity import DeviceIdentity, mac_from_nodeinfo
-from meshtastic_platform.provision.plan import GPS_UPDATE_INTERVAL_S, serial_settings
+from meshtastic_platform.provision.plan import (GPS_UPDATE_INTERVAL_S, bluetooth_settings,
+                                                serial_settings)
 from meshtastic_platform.radio import profile as radio_profile
 from meshtastic_platform.radio import regulatory
 from meshtastic_platform.registry import hardware as hw
@@ -325,6 +326,11 @@ def check_local(s: Snapshot, reg: Registry, node: Node | None, *, ref: str | Non
     for key, want in serial_settings(node):
         out.append(_eq("registry", f"{r} {key}", want == "true", s.get(key),
                        "a serial module left on from an earlier configuration"))
+
+    # Bluetooth on, except on a pbx radio: there the BLE side is the PBX's.
+    for key, want in bluetooth_settings(node):
+        out.append(_eq("registry", f"{r} {key}", want == "true", s.get(key),
+                       "no phone or laptop can reach this radio over BLE"))
 
     # Firmware (V5) and platform (V8).
     version = dev.firmware_version

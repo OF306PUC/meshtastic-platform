@@ -163,11 +163,11 @@ class TestNodePlan(unittest.TestCase):
                           f["lora.tx_power"]), ("45", "CLIENT", "2", "20"))
         self.assertFalse([k for k in f if k.startswith(("serial.", "bluetooth."))])
 
-    def test_other_radios_turn_the_serial_module_off(self):
+    def test_other_radios_turn_the_serial_module_off_and_bluetooth_on(self):
         for ref in ("N1", "GW", "R1"):
             f = flags(self.plan_for(ref))
             self.assertEqual(f["serial.enabled"], "false", ref)
-            self.assertNotIn("bluetooth.enabled", f)
+            self.assertEqual(f["bluetooth.enabled"], "true", ref)
 
     def test_cadence_scale_reaches_the_radio(self):
         data = bench(field_registry())
