@@ -93,16 +93,24 @@ def cmd_show(args) -> int:
               f"{'+'.join(s.type for s in n.sensors) or '-':<7} {iv}")
 
     # Sites: what has been filled in on site, and what is still to do.
-    print(f"\n  {'ref':<4} {'site':<30} {'asset':<10} {'surveyed lat, lon':<25} "
-          f"{'alt m':>6} {'antenna m':>9}")
+    print(f"\n  {'ref':<4} {'site':<24} {'asset':<10} {'type':<13} "
+          f"{'surveyed lat, lon':<25} {'alt m':>6} {'antenna m':>9}")
     for n in reg.nodes:
         s = n.site
         pos = s.surveyed if s else None
         where = f"{pos.lat:.7f}, {pos.lon:.7f}" if pos else "to fill"
         alt = f"{pos.alt_m:g}" if pos and pos.alt_m is not None else "-"
         height = f"{s.antenna_height_m:g}" if s and s.antenna_height_m is not None else "-"
-        print(f"  {n.ref:<4} {(s.name if s and s.name else 'to fill'):<30.30} "
-              f"{(s.asset_code if s and s.asset_code else '-'):<10} {where:<25} {alt:>6} {height:>9}")
+        print(f"  {n.ref:<4} {(s.name if s and s.name else 'to fill'):<24.24} "
+              f"{(s.asset_code if s and s.asset_code else '-'):<10} "
+              f"{(s.asset_type if s and s.asset_type else 'to fill'):<13.13} "
+              f"{where:<25} {alt:>6} {height:>9}")
+
+    if args.csv:
+        from meshtastic_platform.registry import export
+        print()
+        for path in export.write_csv(reg, args.csv):
+            print(f"  wrote {path}")
     return 0
 
 
@@ -199,6 +207,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("show", help="print a deployment: nodes, derived tx_power, radio profile")
     _deployment_arg(p)
+    p.add_argument("--csv", metavar="DIR",
+                   help="also write one spreadsheet per MCU family into DIR, a row per node. "
+                        "Generated, never read back: what is decided on site is copied into "
+                        "the deployment file by hand (an empty cadence cell means the node "
+                        "does not emit that flow at all)")
     p.set_defaults(func=cmd_show)
 
     p = sub.add_parser("provision", help="configure a radio from its registry entry")

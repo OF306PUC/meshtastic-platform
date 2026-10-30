@@ -83,6 +83,12 @@ class Position:
 class Site:
     name: str | None = None
     asset_code: str | None = None
+    # What kind of installation the site is, in the operator's own vocabulary,
+    # and their code for it. Both are a RECORD: they say which of the
+    # operator's assets this node is bolted to, so a reading can be read back
+    # against their inventory. Neither is validated against a list here — the
+    # vocabulary belongs to the deployment, not to this code.
+    asset_type: str | None = None
     # A RECORD the analysis reads; NEVER written to the radio. Keeping it apart
     # from the GPS-reported position is what lets their difference be read as
     # GPS error. `surveyed` is measured on site; `planned` is a desk position

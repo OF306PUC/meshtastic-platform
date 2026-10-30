@@ -107,7 +107,13 @@ in cmd). Nothing is ever defaulted: a command with neither stops.
 ```bash
 python configure.py validate -d my-mesh     # every rule the file must satisfy; --all checks them all
 python configure.py show     -d my-mesh     # nodes, slot frequency, derived tx_power and EIRP, sites still to fill
+python configure.py show     -d my-mesh --csv sheets/   # the same, one spreadsheet per MCU family
 ```
+
+The spreadsheet is generated and never read back: the deployment file stays the
+only place the mesh is declared, and what gets written down on site is copied
+into it by hand. An empty cadence cell means the node does not emit that flow at
+all (absent, never 0); every other empty cell is the to-fill list.
 
 The transmit power is not typed by hand (check SUBTEL regulations in Chile): it is derived from the antenna gain,
 the power limit of the band the slot falls in, and the radio chip's valid

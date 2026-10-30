@@ -56,7 +56,8 @@ nodes:
     tx_power_dbm: 22             # DERIVED — `python configure.py show` prints the value to use
     site:                        # filled in ON SITE
       name: null
-      asset_code: null
+      asset_code: null           # the operator's code for the asset, if it has one
+      asset_type: null           # what kind of installation it is, in their words
       surveyed: {lat: null, lon: null, alt_m: null, alt_source: null}   # GPS read at the site
       antenna_height_m: null
       mount: null

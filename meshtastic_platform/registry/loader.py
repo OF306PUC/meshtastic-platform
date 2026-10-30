@@ -249,12 +249,13 @@ def _node(r: _Reader, raw, where) -> Node | None:
     site = None
     if d.get("site") is not None:
         sd = r.mapping(d["site"], f"{where}.site",
-                       {"name", "asset_code", "surveyed", "planned", "antenna_height_m",
-                        "planned_antenna_height_m", "mount"})
+                       {"name", "asset_code", "asset_type", "surveyed", "planned",
+                        "antenna_height_m", "planned_antenna_height_m", "mount"})
         if sd is not None:
             site = Site(
                 name=r.get(sd, "name", f"{where}.site", str),
                 asset_code=r.get(sd, "asset_code", f"{where}.site", str),
+                asset_type=r.get(sd, "asset_type", f"{where}.site", str),
                 surveyed=_position(r, sd.get("surveyed"), f"{where}.site.surveyed"),
                 planned=_position(r, sd.get("planned"), f"{where}.site.planned"),
                 antenna_height_m=r.get(sd, "antenna_height_m", f"{where}.site", _NUM),

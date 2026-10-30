@@ -15,6 +15,13 @@ Entry format:
 ### Outcomes
 - ...
 ### Next steps / open questions
+- Las etiquetas físicas de N1-N6 son los propios refs (usuario, 2026-10-30),
+  así que `label:` queda en null a propósito: una etiqueta igual al `ref` sería
+  una segunda copia libre de desincronizarse, y además metería N1-N6 en la
+  lista de palabras prohibidas de `test_hard_rules`. Anotado como comentario en
+  el encabezado de los nodos de `rapa-nui.yaml`. GW, D1 y D2 también llevan su
+  ref como etiqueta (usuario, 2026-10-30), así que `label:` queda en null en
+  todo el archivo. Queda por saber qué caja es N3.
 - **URGENTE — secreto en git:** `deployments/psks-san-joaquin-longturbo.txt`
   está **trackeado y no ignorado**, con los dos PSKs reales del campus
   (`LORA_TELEMETRY_CHANNEL_PSK`, `LORA_MSG_CHANNEL_PSK`, 32 bytes cada uno).
@@ -61,6 +68,35 @@ serie tras un reboot o desenchufe; si D1/D2 deberían tener campos `ble` y
 - El primer intento del patrón llevaba comentario al final de la línea y
   **no filtraba nada**: `.gitignore` solo reconoce `#` al inicio de línea.
   Detectado al probarlo con `git check-ignore`, no al leerlo.
+- **Nuevo:** `meshtastic_platform/registry/export.py` y `configure.py show
+  --csv DIR`: una planilla por familia de MCU, una fila por nodo. Generada y
+  nunca leída de vuelta — el YAML sigue siendo la única declaración de la malla
+  (regla 1). Una celda de cadencia vacía significa que el nodo no emite ese
+  flujo (V3b: ausente, nunca 0); el resto de las celdas vacías son la lista de
+  pendientes para terreno. `tests/test_export.py`, 10 pruebas (219 en total,
+  OK). README actualizado.
+- **Nuevo campo `site.asset_type`** (modelo, loader, `_template.yaml`, las
+  nueve entradas de `rapa-nui.yaml` en null, columna en la planilla y en la
+  tabla de sitios de `show`). Es un registro: dice a qué activo del operador
+  está atornillado el nodo, en el vocabulario del operador. No se valida contra
+  ninguna lista en el código — el vocabulario pertenece al deployment, no al
+  código (regla 1). 222 tests OK.
+- `deployments/sasipa-info/activos_sasipa.csv` tiene 16 activos con la columna
+  `layer` en exactamente dos valores (8 y 8), más `codigo` y `nombre`.
+- Llenados `site.name`, `asset_code` y `asset_type` de N1-N6 y GW desde
+  `sasipa-info/sitios_sasipa.json`, tras verificar que las nueve coordenadas
+  `planned` del registro coinciden EXACTAMENTE con las del JSON (comparación
+  programática, no a ojo). N1 ESRK-1 Estanque, N2 CSUBS-31 Captacion, N3 ESPP-2
+  Estanque, N4 ESLC-1 Estanque, N5 Relay sin activo (1088 m del más cercano),
+  N6 y GW comparten Central SASIPA. D1/D2 siguen sin sitio.
+- N4 lleva ahora un `notes:` propio: el JSON marca una posible transposición
+  ESVAI-1/ESLC-1 (Cota_Fondo 151.54 m contra SRTM 100 m y curvas 94.9 m). Va en
+  el nodo y no en un comentario, para que viaje con el dato.
+- El usuario repobló `rapa-nui.yaml` en el IDE: N1, N2, N4-N6 recuperaron
+  `node_id`/`mac`/`firmware` y GW, D1 y D2 tomaron las identidades que estaban
+  en los archivos borrados (`!6c74104c`, `!6c72f308`, `!6c743130`). Solo N3
+  sigue sin identidad. Ya no hay conflicto cruzado porque los otros archivos no
+  existen: la malla quedó consolidada en un solo deployment.
 
 ### Decisions
 - **Se limpia `rapa-nui`, no los otros archivos.** Sus seis entradas están
