@@ -1,0 +1,54 @@
+% The packet's trip through the MAC, alone: the same loop as
+% channel-access-loop with the sensing detail and the notes stripped out, for a
+% slide or for a first mention in the text.
+% Build from this folder: pdflatex channel-access-trip.tex  (palette.tex).
+%
+% Firmware read at meshtastic/firmware tag v2.7.26.54e0d8d (the
+% firmware_target of the deployments): mesh/RadioLibInterface.cpp (onNotify,
+% setTransmitDelay, canSendImmediately), mesh/SX126xInterface.cpp
+% (isActivelyReceiving, isChannelActive).
+%   channel-access-trip   — this figure: the loop and nothing else
+%   channel-access-loop   — the same loop, plus what each sense actually reads
+%   channel-access-irq    — the interrupts and notifications that drive the loop
+%   channel-access-model  — the arithmetic behind every number
+%   channel-access-window — the contention windows on a time axis
+\documentclass[tikz,border=6pt]{standalone}
+\usepackage{amsmath}
+\input{palette}
+
+\tikzset{
+  stg/.style={box, fill=white, draw=mtdark!60, align=center, minimum width=56mm, font=\small},
+  chk/.style={box, fill=mtdark!6, draw=mtdark!45, align=center, minimum width=56mm, font=\small},
+  snd/.style={box, fill=mtgreen!16, draw=mtgreen7, align=center, minimum width=56mm, font=\small},
+  flow/.style={->, thick, draw=mtdark!75},
+  back/.style={->, thick, draw=amber},
+  elab/.style={font=\scriptsize\itshape, inner sep=1.5pt, fill=white, text=mtdark!75},
+  panel/.style={font=\bfseries\small, text=mtdark},
+}
+\newcommand{\head}[1]{\textbf{#1}}
+
+\begin{document}
+\begin{tikzpicture}[font=\small]
+
+\node[panel] at (-6.0,1.0) {One packet's trip through the MAC};
+
+\node[stg] (q)  at (-6.0, 0.0) {head of \texttt{txQueue}};
+\node[stg, minimum height=15mm] (dr) at (-6.0,-2.0)
+  {\head{draw a backoff}\\[3pt] $\displaystyle \delta = k\,\sigma$};
+\node[stg] (wt) at (-6.0,-4.1) {wait until $t_\mathrm{tx} = t_0 + \delta$};
+\node[chk] (bs) at (-6.0,-6.3) {\head{busy?} is the radio mid-packet?};
+\node[chk] (cd) at (-6.0,-8.5) {\head{CAD} --- is there a carrier right now?};
+\node[snd] (tx) at (-6.0,-10.7) {\head{transmit}};
+
+\draw[flow] (q) -- (dr);
+\draw[flow] (dr) -- (wt);
+\draw[flow] (wt) -- node[elab, right] {$\delta$ elapsed} (bs);
+\draw[flow] (bs) -- node[elab, right] {free} (cd);
+\draw[flow] (cd) -- node[elab, right] {clear} (tx);
+
+\draw[back] (bs.west) -- ++(-1.0,0) |- node[elab, left, pos=0.25] {re-draw} (dr.west);
+\draw[back] (cd.west) -- ++(-2.0,0) |- ($(dr.west)+(0,-0.45)$);
+\node[elab, rotate=90, text=mtdark!75] at (-10.6,-5.9) {busy: receive it, then re-draw};
+
+\end{tikzpicture}
+\end{document}

@@ -1,0 +1,94 @@
+% Meshtastic channel access, 1 of 4: one packet's trip through the MAC.
+% Build from this folder: pdflatex channel-access-loop.tex  (palette.tex).
+%
+% One of four figures on Meshtastic channel access, all from the same reading
+% of meshtastic/firmware tag v2.7.26.54e0d8d (the firmware_target of the
+% deployments): mesh/RadioLibInterface.cpp (onNotify, setTransmitDelay,
+% canSendImmediately, receiveDetected), mesh/SX126xInterface.cpp
+% (isActivelyReceiving, isChannelActive), mesh/RadioInterface.{h,cpp}.
+%   channel-access-trip   — the MAC loop alone, nothing else on the page
+%   channel-access-loop   — the same loop, plus what each sense actually reads
+%   channel-access-irq    — the interrupts and notifications that drive the loop
+%   channel-access-model  — the arithmetic behind every number
+%   channel-access-window — the contention windows on a time axis
+% The relay decision that feeds the queue is rebroadcast.tex.
+\documentclass[tikz,border=6pt]{standalone}
+\usepackage{amsmath}
+\input{palette}
+
+\tikzset{
+  stg/.style={box, fill=white, draw=mtdark!60, align=center, minimum width=56mm, font=\small},
+  chk/.style={box, fill=mtdark!6, draw=mtdark!45, align=center, minimum width=56mm, font=\small},
+  snd/.style={box, fill=mtgreen!16, draw=mtgreen7, align=center, minimum width=56mm, font=\small},
+  chip/.style={box, fill=lorablue!7, draw=lorablue!70, align=left, text width=58mm, font=\scriptsize},
+  flow/.style={->, thick, draw=mtdark!75},
+  back/.style={->, thick, draw=amber},
+  hw/.style={->, thick, draw=lorablue!80!black},
+  elab/.style={font=\scriptsize\itshape, inner sep=1.5pt, fill=white, text=mtdark!75},
+  panel/.style={font=\bfseries\small, text=mtdark},
+}
+\newcommand{\head}[1]{\textbf{#1}}
+
+\begin{document}
+\begin{tikzpicture}[font=\small]
+
+\node[panel, anchor=west] at (-9.6,1.0) {One packet's trip through the MAC};
+
+\node[stg] (q)  at (-6.0, 0.0) {head of \texttt{txQueue}};
+\node[stg, minimum height=15mm] (dr) at (-6.0,-2.0)
+  {\head{draw a backoff}\\[3pt] $\displaystyle \delta = k\,\sigma$};
+\node[stg] (wt) at (-6.0,-4.1) {wait until $t_\mathrm{tx} = t_0 + \delta$};
+\node[chk] (bs) at (-6.0,-6.3) {\head{busy?} is the radio mid-packet?};
+\node[chk] (cd) at (-6.0,-8.7) {\head{CAD} --- is there a carrier right now?};
+\node[snd] (tx) at (-6.0,-11.0) {\head{transmit}\\[-1pt]
+  {\scriptsize \texttt{startSend()} $\to$ \texttt{startTransmit()}}};
+
+\draw[flow] (q) -- (dr);
+\draw[flow] (dr) -- (wt);
+\draw[flow] (wt) -- node[elab, right] {$\delta$ elapsed} (bs);
+\draw[flow] (bs) -- node[elab, right] {free} (cd);
+\draw[flow] (cd) -- node[elab, right] {clear} (tx);
+
+\draw[back] (bs.west) -- ++(-1.0,0) |- node[elab, left, pos=0.25] {re-draw} (dr.west);
+\draw[back] (cd.west) -- ++(-2.0,0) |- ($(dr.west)+(0,-0.45)$);
+\node[elab, rotate=90, text=mtdark!75] at (-10.6,-5.9) {busy: receive it, then re-draw};
+
+% ── the two senses, and the signal each one actually reads ───────────────────
+\node[chip] (sb) at (2.2,-6.3)
+  {\head{\texttt{canSendImmediately()}}\\[2pt]
+   \textbf{Tx} --- \texttt{sendingPacket != NULL}: our own packet is still in the
+   air, its \texttt{TxDone} not yet in.\\[2pt]
+   \textbf{Rx} --- \texttt{isActivelyReceiving()} reads the SX1262 \textbf{IRQ
+   status register} over SPI: \texttt{PREAMBLE\_DETECTED} or
+   \texttt{HEADER\_VALID} still standing means a preamble or header is being
+   demodulated right now. These two flags are \emph{polled}; only
+   \texttt{RxDone}/\texttt{TxDone} are wired to DIO1.\\[2pt]
+   A preamble that never becomes a valid header is ignored after
+   $2\,t_\mathrm{preamble}$, and a header with no \texttt{RxDone} after one
+   maximum packet time --- a false detection cannot wedge the transmitter.};
+
+\node[chip] (cc) at (2.2,-10.2)
+  {\head{\texttt{isChannelActive()}}\\[2pt]
+   \texttt{scanChannel()} puts the chip in \textbf{CAD} mode for
+   $N_\mathrm{CAD}=2$ symbols and returns \texttt{LORA\_DETECTED} or
+   \texttt{CHANNEL\_FREE}: a correlation against the LoRa preamble, not an energy
+   threshold --- it hears a chirp already in flight, never a node about to start.};
+
+\draw[hw] (sb.west) -- node[elab, above] {SPI poll} (bs.east);
+\draw[hw] (cc.west) -- node[elab, above] {CAD scan} (cd.east);
+
+\node[note, text width=60mm, align=left, anchor=north west, text=mtdark!80] at (-0.9,-12.0)
+  {\textbf{Where the wake-ups come from.} The wait is a timer notification, and
+   every completed Rx or Tx re-arms the backoff of whatever is still queued ---
+   the figure \texttt{channel-access-irq} draws that path.};
+
+\node[note, text width=58mm, align=left, anchor=north west, text=mtdark!80] at (-11.4,-12.6)
+  {\textbf{Not 802.11.} The backoff is \emph{re-drawn}, never frozen and resumed,
+   and it never doubles after a loss: there are no ACKs at this layer, so the
+   window is a function of $U_{ch}$ (own traffic) or \texttt{rx\_snr} (a relay)
+   alone. CAD cannot separate two stations that drew the same $k$ --- that tie
+   is the collision mechanism. A re-draw is capped at
+   $t_\mathrm{tx} \leq t_\mathrm{now} + 2\,\delta_\mathrm{worst}$.};
+
+\end{tikzpicture}
+\end{document}

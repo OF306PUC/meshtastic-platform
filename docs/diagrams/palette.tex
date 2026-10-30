@@ -10,7 +10,11 @@
 %               (github.com/meshtastic/design).
 %   LoRa        #00AEEF "LoRa blue" (Semtech LoRa logo usage guidelines).
 %   Connector   amber, the one accent outside both palettes.
+%
+% A document with a font of its own defines \paletteKeepFont before the \input:
+% it then gets the colours and styles, and keeps its font.
 \usepackage{iftex}
+\ifdefined\paletteKeepFont\else
 \ifPDFTeX
   \usepackage[T1]{fontenc}
   \usepackage{mathptmx}
@@ -19,6 +23,7 @@
   \IfFontExistsTF{Times New Roman}
     {\setmainfont{Times New Roman}}
     {\setmainfont{TeX Gyre Termes}}
+\fi
 \fi
 \usetikzlibrary{positioning,arrows.meta,fit,backgrounds,calc,
                 decorations.pathmorphing,shapes.geometric}

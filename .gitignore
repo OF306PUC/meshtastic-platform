@@ -15,8 +15,11 @@ runs/
 field-testing-data/
 
 # Characterisation reports of one application (its methodology and analysis):
-# kept locally, not part of the platform.
+# kept locally, not part of the platform. Same reasoning for the SASIPA
+# deployment guide: it describes one application of the platform, it carries
+# site data and photographs, and it is handed over as a PDF.
 report/
+docs/sasipa-despliegue/
 
 # Device console captures and exports: phone numbers, message content, private keys
 captures/
@@ -34,3 +37,7 @@ CLAUDE.md
 
 # Editor
 .vscode/
+
+# Generated diagrams: 
+docs/diagrams/*.pdf
+docs/diagrams/*.png

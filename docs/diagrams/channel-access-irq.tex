@@ -1,0 +1,108 @@
+% Meshtastic channel access, 2 of 4: the interrupts and notifications that
+% drive the MAC loop.
+% Build from this folder: pdflatex channel-access-irq.tex  (palette.tex).
+%
+% One of four figures on Meshtastic channel access, all from the same reading
+% of meshtastic/firmware tag v2.7.26.54e0d8d (the firmware_target of the
+% deployments): mesh/RadioLibInterface.cpp (isrLevel0Common, onNotify,
+% setTransmitDelay, startSend, completeSending, handleReceiveInterrupt,
+% pollMissedIrqs), mesh/SX126xInterface.cpp (startReceive), airtime.{h,cpp}.
+%   channel-access-trip   — the MAC loop alone, nothing else on the page
+%   channel-access-loop   — the same loop, plus what each sense actually reads
+%   channel-access-irq    — the interrupts and notifications that drive the loop
+%   channel-access-model  — the arithmetic behind every number
+%   channel-access-window — the contention windows on a time axis
+\documentclass[tikz,border=6pt]{standalone}
+\usepackage{amsmath}
+\input{palette}
+
+\tikzset{
+  mac/.style={box, fill=mtgreen!16, draw=mtgreen7, align=center, font=\small},
+  case/.style={box, fill=white, draw=mtdark!55, align=left, text width=46mm, font=\scriptsize},
+  low/.style={box, fill=lorablue!7, draw=lorablue!70, align=center, font=\scriptsize},
+  hw/.style={->, thick, draw=lorablue!80!black},
+  up/.style={->, thick, draw=mtdark!75},
+  elab/.style={font=\scriptsize\itshape, inner sep=1.5pt, fill=white, text=mtdark!75},
+  panel/.style={font=\bfseries\small, text=mtdark},
+}
+\newcommand{\head}[1]{\textbf{#1}}
+
+\begin{document}
+\begin{tikzpicture}[font=\small]
+
+\node[panel, anchor=west] at (-8.2,1.9) {What drives the loop: the radio's interrupts};
+
+% ── the MAC loop, seen from below ────────────────────────────────────────────
+\node[mac, minimum width=150mm] (mac) at (0.6,0.8)
+  {\head{the MAC loop} --- figure \texttt{channel-access-loop}\\[-1pt]
+   {\scriptsize draw $\delta$ \textperiodcentered\ wait \textperiodcentered\ busy?
+    \textperiodcentered\ CAD \textperiodcentered\ transmit}};
+
+% ── the three things onNotify() can be woken with ────────────────────────────
+\node[case] (onrx) at (-4.6,-2.6)
+  {\head{\texttt{ISR\_RX}}\\[2pt]
+   \texttt{handleReceiveInterrupt()}: the air time goes into $U_{ch}$, the frame is
+   decoded and handed to the router (figure \texttt{rebroadcast}).};
+\node[case] (ontx) at (0.6,-2.6)
+  {\head{\texttt{ISR\_TX}}\\[2pt]
+   \texttt{handleTransmitInterrupt()} $\to$ \texttt{completeSending()}: the ToA just
+   transmitted goes into $U_{ch}$, the packet is freed, \texttt{txGood++}.};
+\node[case] (ontim) at (5.8,-2.6)
+  {\head{\texttt{TRANSMIT\_DELAY\_COMPLETED}}\\[2pt]
+   The backoff elapsed: run the queue --- busy?, CAD, and send or re-draw.};
+
+\begin{scope}[on background layer]
+  \node[draw=mtdark!45, dashed, rounded corners=6pt, fill=mtdark!3,
+        inner xsep=7pt, inner ysep=13pt, fit=(onrx)(ontx)(ontim)] (grp) {};
+\end{scope}
+\node[font=\scriptsize\bfseries, anchor=north west, text=mtdark!85] at ($(grp.north west)+(3pt,-2pt)$)
+  {\texttt{onNotify(cause)} --- on the radio thread, one cause per wake-up};
+
+% ── below: where each cause is born ──────────────────────────────────────────
+\node[low, text width=66mm] (isr) at (-2.0,-6.4)
+  {\head{\texttt{isrLevel0Common(cause)}} --- in interrupt context\\[2pt]
+   \texttt{disableInterrupt()}, then \texttt{notifyFromISR(cause)}};
+
+\node[low, text width=46mm] (tmr) at (5.8,-6.4)
+  {\head{the backoff timer}\\[2pt]
+   \texttt{notifyLater($\delta$, TRANSMIT\_DELAY\_COMPLETED)}};
+
+\node[radio, minimum width=66mm] (rad) at (-2.0,-8.8)
+  {\textbf{SX1262 \textperiodcentered\ DIO1}\\[-1pt]
+   \radiosub{\texttt{RxDone} \textperiodcentered\ \texttt{TxDone} --- the only two
+   events on the wire}};
+
+\draw[hw] (rad.north) -- node[elab, right] {a rising edge on DIO1} (isr.south);
+\draw[hw] (isr.north) -| node[elab, above, pos=0.25] {\texttt{ISR\_RX}} (onrx.south);
+\draw[hw] (isr.north) -| node[elab, above, pos=0.25] {\texttt{ISR\_TX}} (ontx.south);
+\draw[hw] (tmr.north) -- (ontim.south);
+
+\draw[up] (onrx.north) -- node[elab, right, align=left] {\texttt{startReceive()}\\ \texttt{setTransmitDelay()}}
+          (onrx.north |- mac.south);
+\draw[up] (ontx.north) -- node[elab, right, align=left] {\texttt{startReceive()}\\ \texttt{setTransmitDelay()}}
+          (ontx.north |- mac.south);
+\draw[up] (ontim.north) -- (ontim.north |- mac.south);
+
+\draw[hw] (mac.east) -- ++(0.7,0) |- node[elab, right, pos=0.25] {armed on every wait} (tmr.east);
+\draw[hw] (mac.east) -- ++(2.3,0) |- (rad.east);
+\node[elab, rotate=90, text=mtdark!75] at (9.8,-4.6)
+  {\texttt{startSend()} / \texttt{startReceive()}: arm \texttt{isrTxLevel0} / \texttt{isrRxLevel0}};
+
+% ── two notes ────────────────────────────────────────────────────────────────
+\node[note, text width=76mm, align=left, anchor=north west, text=mtdark!80] at (-8.2,-10.0)
+  {\textbf{This is where $U_{ch}$ is fed.} Every reception is logged, decodable or
+   not: \texttt{RX\_ALL\_LOG} for a frame rejected as noise, too short, bad CRC or
+   another channel, \texttt{RX\_LOG} for a valid mesh packet, \texttt{TX\_LOG} in
+   \texttt{completeSending()}. Channel utilisation sums all three, so a node's own
+   view of the channel includes traffic it could never decode.};
+
+\node[note, text width=76mm, align=left, anchor=north west, text=mtdark!80] at (0.6,-10.0)
+  {\textbf{Edge-triggered, and a single slot.} An edge can be missed, so
+   \texttt{pollMissedIrqs()} re-reads the \texttt{RX\_DONE} flag about once a second
+   and re-notifies \texttt{ISR\_RX} if it finds one. The thread has one
+   notification slot and \texttt{notifyLater()} does not overwrite a pending
+   notification. Between packets the chip is not listening continuously: it sniffs
+   in Rx duty-cycle mode, which is why the preamble is 16 symbols long.};
+
+\end{tikzpicture}
+\end{document}
