@@ -15,8 +15,113 @@ Entry format:
 ### Outcomes
 - ...
 ### Next steps / open questions
+- **URGENTE — secreto en git:** `deployments/psks-san-joaquin-longturbo.txt`
+  está **trackeado y no ignorado**, con los dos PSKs reales del campus
+  (`LORA_TELEMETRY_CHANNEL_PSK`, `LORA_MSG_CHANNEL_PSK`, 32 bytes cada uno).
+  Entró en el commit `cebcf4f`. Viola la regla 8 (PSKs solo en `.env`). Borrar
+  el archivo ahora NO lo saca del historial: hay que rotar las dos claves o
+  reescribir el historial. Pendiente de decisión del usuario.
+- Quedó huérfano ese mismo `.txt` al borrarse `san-joaquin-longturbo.yaml`.
+- `docs/testbeds/san-joaquin.md`, `.env.example` y el comentario de
+  `bench-lilygo.yaml:37` siguen mencionando san-joaquin; se dejan hasta saber
+  cómo se llama el deployment que lo reemplace.
 - ...
 ```
+
+---
+
+## 2026-10-30 — Identidades duplicadas entre deployments; reconexión serie y el bloque pbx
+**Time:** 11:30 (aprox)
+**User request:** por qué el aprovisionamiento se niega cuando el node_id está
+en otro deployment; limpiar esos ids dejándolos en null (solo `node_id` y
+`mac`); si las SenseCAP tienen MAC dinámica; si es posible reconectar el puerto
+serie tras un reboot o desenchufe; si D1/D2 deberían tener campos `ble` y
+`serial` para servir a la mesh PBX.
+
+### Actions taken
+- Diagnosticado el rechazo: `identity.preflight` recorre TODOS los archivos de
+  `deployments/` y bloquea si el `node_id` del equipo aparece en otro con un
+  `ref` distinto (`identity.py:88-94`). Seis radios estaban registradas con dos
+  nombres: `rapa-nui` N1–N3 ↔ `san-joaquin` 1–3, y N4–N6 ↔ `office-bench` N1–N3.
+- `deployments/rapa-nui.yaml`: `node_id` y `mac` a `null` en N1–N6 (11 líneas).
+  Nada más tocado. Copia del original en el scratchpad de la sesión.
+- Verificado: `validate --all` ✓ en los seis archivos; cero `node_id`
+  compartidos con refs distintos.
+- Revisado el camino de desconexión serie en la librería `meshtastic` 2.7.8 y
+  el ciclo de `receiver.py`.
+- Revisado `plan.serial_settings` / `bluetooth_settings` y la invariante X.
+- Borrado `deployments/san-joaquin.yaml` (`git rm`, pedido del usuario: el
+  campus pasa a tener más nodos y se reescribirá). El usuario ya había borrado
+  antes `office-bench.yaml` y `san-joaquin-longturbo.yaml` en el árbol de
+  trabajo. Quedan tres deployments: `bench-lilygo`, `mini`, `rapa-nui`.
+- Verificado tras el borrado: `validate --all` ✓ en los tres; 209 tests OK.
+- `git rm` de `deployments/psks-san-joaquin-longturbo.txt` y patrón de
+  `.gitignore` ampliado de `psks.txt` a `psks*.txt`, para que un
+  `psks-<deployment>.txt` no se pueda volver a commitear.
+- El primer intento del patrón llevaba comentario al final de la línea y
+  **no filtraba nada**: `.gitignore` solo reconoce `#` al inicio de línea.
+  Detectado al probarlo con `git check-ignore`, no al leerlo.
+
+### Decisions
+- **Se limpia `rapa-nui`, no los otros archivos.** Sus seis entradas están
+  `status: planned`: un nodo planificado no debe reclamar una radio concreta.
+  `office-bench` y `san-joaquin*` describen radios que existen hoy y conservan
+  sus identidades.
+- **Marcar `status: retired` NO sirve** para liberar una identidad:
+  `Registry.by_node_id` recorre todos los nodos sin mirar `status`
+  (`model.py:191`). Tiene que ser `node_id: null`.
+- **La MAC de las SenseCAP no es dinámica.** Es la dirección BLE *random
+  static* del FICR del nRF52840: inmutable, sobrevive a un reflasheo. Se
+  verifica en los datos — el `node_id` son sus cuatro bytes bajos, y los cinco
+  primeros bytes registrados eran todos ≥ `0xC0`, firma de random static. La
+  MAC faltante de N3 nunca se registró (viene `null` desde `32ae967`): un dato
+  no copiado, no una propiedad del equipo.
+- **No se agregan campos `ble:`/`serial:` de configuración a D1/D2.**
+  Contradiría la decisión del 2026-10-26 (el enlace radio↔PBX es del proyecto
+  PBX). El mecanismo ya existe y está keyeado por `function: pbx`, que hace que
+  la plataforma no escriba ni serie ni Bluetooth (`plan.py:142,153`).
+- **D1/D2 quedan como `access` por ahora** (usuario, 2026-10-30). Son las
+  únicas radios por las que una persona llega a la malla desde el teléfono;
+  convertirlas en `pbx` apagaría la mensajería antes de tener el reemplazo de
+  meshpbx andando.
+- **No se implementó reconexión serie** (usuario: solo evaluar).
+- **No se nullearon los campos de `san-joaquin.yaml`**: se borró el archivo
+  entero. Probado antes en copia — nullear `node_id`/`mac`/`firmware` ahí daba
+  6 errores (V1 y V5), porque 1–3 son `status: deployed` en un archivo
+  `kind: field` (`validate.py:303`).
+
+### Outcomes
+- Seis conflictos de identidad resueltos; `validate --all` ✓.
+- Hallazgo: `User.macaddr` está **DEPRECATED** en el protobuf de Meshtastic
+  (campo 4). Si una versión futura del firmware deja de poblarlo, `inspect`
+  reportará MAC vacía en radios con dirección estable y la comprobación V1
+  «node_id = bytes bajos de la mac» (`validate.py:172`) se queda sin insumo.
+  El `node_id` es la identidad durable; la MAC es corroboración.
+- Hallazgo (regla 9): al desconectarse el puerto, `receiver.py` **no se entera**.
+  La librería mata su hilo lector, publica `meshtastic.connection.lost` y pone
+  `stream = None`; el bucle sigue, `rx.tick()` anuncia gaps de toda la malla
+  (se lee como silencio de la malla, no como notebook sin radio) y
+  `own_position()` no lanza: `getMyNodeInfo()` es una búsqueda en el diccionario
+  en memoria (`mesh_interface.py:1075`) y devuelve el último fix para siempre,
+  contado como `repeated`, nunca como error.
+
+### Next steps / open questions
+- Si se implementa reconexión: detectar y **registrar el corte** primero (un
+  intervalo en `session.json` y los gaps de esa ventana suprimidos) — una
+  reconexión sin registrar el corte da datos que mienten. Después reconectar
+  (hay que construir un `SerialInterface` nuevo; no hay `reopen()`), exigiendo
+  path `/dev/serial/by-id/`, reverificando `node_id` y sin re-suscribir a
+  pubsub.
+- Al aprovisionar Rapa Nui, las seis entradas entran ahora por el camino de
+  *commissioning*: hay que copiar `node_id` y `mac` al archivo.
+- La guía SASIPA usa `!0b64122b` como ejemplo de comillas YAML
+  (`07-verificacion.tex:34`); ese id pertenece hoy a `san-joaquin:1`. Ofrecido
+  cambiarlo por uno inventado, sin respuesta.
+- `external/meshtastic-gateway/deployments/` todavía no existe: la regla 2 no
+  tiene nada que sincronizar.
+- Si meshpbx necesita que el registro diga dónde está su radio, el lugar es el
+  bloque `pbx` (un registro, nunca escrito): `link`, `uart_baud`, dirección BLE.
+  Decisión pendiente del proyecto PBX.
 
 ---
 

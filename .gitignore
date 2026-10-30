@@ -1,6 +1,7 @@
 # Secrets: channel PSKs live only in .env (I8)
 .env
-psks.txt
+# psks.txt and psks-<deployment>.txt alike: one of the latter was committed once.
+psks*.txt
 
 # Python
 .venv/

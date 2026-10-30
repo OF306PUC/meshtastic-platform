@@ -104,7 +104,7 @@ nodes:
     mac: "C1:C8:0B:64:12:2B"
     hardware: sensecap_solar_node_p1_pro
     mcu: nrf52840
-    firmware: null
+    firmware: "2.7.26"
     role: CLIENT                 # once sites are known, the highest/farthest node may take CLIENT_BASE (plan §2.6)
     hop_limit: 3
     antenna:
@@ -132,7 +132,7 @@ nodes:
     mac: "D6:75:7C:70:DA:02"
     hardware: sensecap_solar_node_p1_pro
     mcu: nrf52840
-    firmware: null
+    firmware: "2.7.26"
     role: CLIENT
     hop_limit: 3
     antenna:
@@ -156,7 +156,7 @@ nodes:
   - ref: N3
     function: node
     status: planned
-    node_id: "!32fe0d4e"
+    node_id: null
     mac: null
     hardware: sensecap_solar_node_p1_pro
     mcu: nrf52840
@@ -189,7 +189,7 @@ nodes:
     mac: "C7:8E:88:62:17:F0"
     hardware: sensecap_solar_node_p1_pro
     mcu: nrf52840
-    firmware: null
+    firmware: "2.7.26"
     role: CLIENT
     hop_limit: 3
     antenna:
@@ -216,7 +216,7 @@ nodes:
     mac: "E4:33:99:54:67:67"
     hardware: sensecap_solar_node_p1_pro
     mcu: nrf52840
-    firmware: null
+    firmware: "2.7.26"
     role: CLIENT
     hop_limit: 3
     antenna:
@@ -243,7 +243,7 @@ nodes:
     mac: "F5:1B:40:31:92:D7"
     hardware: sensecap_solar_node_p1_pro
     mcu: nrf52840
-    firmware: null
+    firmware: "2.7.26"
     role: CLIENT                 # centralising node: relays the cluster to GW
     hop_limit: 3
     antenna:
@@ -269,11 +269,11 @@ nodes:
   - ref: GW
     function: gateway
     status: planned
-    node_id: null
-    mac: null
+    node_id: "!6c74104c"
+    mac: "A0:DD:6C:74:10:4C"
     hardware: lilygo_tbeam_sx1276
     mcu: esp32
-    firmware: null
+    firmware: "2.7.26"
     role: CLIENT_MUTE            # hears and never relays: it must not contaminate its own measurement (I5)
     hop_limit: 1
     antenna:
@@ -303,11 +303,11 @@ nodes:
   - ref: D1
     function: access
     status: planned
-    node_id: null
-    mac: null
+    node_id: "!6c72f308"
+    mac: "A0:DD:6C:72:F3:08"
     hardware: lilygo_tbeam_sx1276
     mcu: esp32
-    firmware: null
+    firmware: "2.7.26"
     role: CLIENT_MUTE
     hop_limit: 1
     antenna:
@@ -329,11 +329,11 @@ nodes:
   - ref: D2
     function: access
     status: planned
-    node_id: null
-    mac: null
+    node_id: "!6c743130"
+    mac: "A0:DD:6C:74:31:30"
     hardware: lilygo_tbeam_sx1276
     mcu: esp32
-    firmware: null
+    firmware: "2.7.26"
     role: CLIENT_MUTE
     hop_limit: 1
     antenna:
