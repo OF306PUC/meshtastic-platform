@@ -81,6 +81,10 @@ radio:                              # identical on every radio of the mesh
   rebroadcast_mode: LOCAL_ONLY
   position_precision: 32
   rx_boosted_gain: true
+  node_info_secs: 10800             # the identity beacon; required, never 0
+  neighbor_info:                    # OMIT the block to leave the module off
+    interval_secs: 14400
+    transmit_over_lora: false       # true is the only setting that costs airtime
   eirp_caps:                        # the power limits that apply where the mesh runs
     - {band_mhz: [915, 928], eirp_dbm: 27, label: "..."}
 nodes:
@@ -150,6 +154,8 @@ The decision, the PBX connection in detail and a worked example:
 | `device.rebroadcast_mode` | `radio.rebroadcast_mode` | Which packets a node relays. `LOCAL_ONLY`: only those of its own channels |
 | `position_precision` (per channel) | `radio.position_precision` | Bits of latitude/longitude sent (32 = full) |
 | `lora.sx126x_rx_boosted_gain` | `radio.rx_boosted_gain` | Extra receive sensitivity, SX126x chips only |
+| `device.node_info_broadcast_secs` | `radio.node_info_secs` | How often a radio re-announces its identity (name, role, hardware, public key). Cannot be switched off; firmware floor one hour, default three. This is how a rebooted or replaced node gets a name in everyone else's node database instead of a bare `!0b64122b` |
+| `neighbor_info.*` | `radio.neighbor_info` | The adjacency beacon: up to ten neighbours with their SNR. Written OFF when the block is absent, so a radio reused from another mesh stops sending it. `transmit_over_lora` is the airtime decision — left false the beacon never reaches the channel. Firmware floor four hours |
 | `device.role` | node `role` | `CLIENT`: reports and relays. `CLIENT_MUTE`: never relays others' packets (gateway, receiver) |
 | `lora.hop_limit` | node `hop_limit` | How many times a packet it sends may be relayed |
 | `lora.tx_power` | derived, or node `tx_power_dbm` under `radio.tx_power_policy: declared` | See above |

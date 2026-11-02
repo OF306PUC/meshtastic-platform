@@ -31,6 +31,7 @@ def healthy(**config):
         "lora.channel_num": 45, "lora.hop_limit": 1, "lora.tx_power": 22,
         "lora.sx126x_rx_boosted_gain": True, "lora.override_frequency": 0.0,
         "bluetooth.enabled": True, "serial.enabled": False,
+        "device.node_info_broadcast_secs": 10800, "neighbor_info.enabled": False,
         "position.gps_mode": "ENABLED", "position.gps_update_interval": 3600,
         "position.position_broadcast_secs": 600,
         "position.position_broadcast_smart_enabled": False, "position.fixed_position": False,
@@ -156,6 +157,26 @@ class TestDrift(unittest.TestCase):
         snap = healthy()
         snap.channels[1]["enabled"] = False
         self.assertCaught(snap, "channel 1")
+
+    def test_a_neighbour_beacon_left_on_by_another_mesh(self):
+        """The silent divergence the read-back exists for: it was invisible before."""
+        self.assertCaught(healthy(**{"neighbor_info.enabled": True}), "neighbor_info.enabled")
+
+    def test_beacon_cadence_drift(self):
+        self.assertCaught(healthy(**{"device.node_info_broadcast_secs": 3600}),
+                          "node_info_broadcast_secs")
+
+    def test_a_declared_neighbour_beacon_must_be_on_and_on_air(self):
+        data = field_registry()
+        data["nodes"][0].update(node_id="!0b64122b", firmware="2.7.26")
+        data["radio"]["neighbor_info"] = {"interval_secs": 14400, "transmit_over_lora": True}
+        reg = parse(data)
+        on = {"neighbor_info.enabled": True, "neighbor_info.update_interval": 14400,
+              "neighbor_info.transmit_over_lora": True}
+        self.assertEqual([i for i in issues(healthy(**on), reg) if "neighbor_info" in i], [])
+        # Enabled, but kept off the air: the adjacency graph never reaches the mesh.
+        self.assertCaught(healthy(**dict(on, **{"neighbor_info.transmit_over_lora": False})),
+                          "transmit_over_lora", reg)
 
     def test_a_serial_module_left_on(self):
         self.assertCaught(healthy(**{"serial.enabled": True}), "serial.enabled")

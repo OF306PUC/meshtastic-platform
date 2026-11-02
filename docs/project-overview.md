@@ -159,3 +159,53 @@ application. Updated 2026-10-27 to the split and to the target configuration.
 * A LILYGO indoors may get no GPS fix, hence no position flow (V3).
 * Noise figure: figures use 6.0 dB; earlier analyses used 4.5 and 6.5 dB —
   unreconciled.
+
+### Beacons and diagnostic modules (2026-11-02)
+
+Besides the measured flows in `intervals`, a radio emits two background
+beacons, and both are now declared in the `radio:` block — not as flows.
+NodeInfo cannot be switched off and every node emits it; NeighborInfo is
+floored by the firmware at four hours. At that scale there is no cadence for
+the gap estimator to measure against, so they are mesh-wide policy, like
+`rebroadcast_mode`. Keeping them out of `intervals` also keeps them out of
+`cadence_scale`, which would otherwise push a bench value below the firmware
+floor and make `inspect` report drift for ever.
+
+* **NodeInfo** — `radio.node_info_secs`, required, never 0 (the firmware reads
+  0 as "use the default"). Floor 3600 s, firmware default 10800. rapa-nui runs
+  7200.
+* **NeighborInfo** (portnum 71) — `radio.neighbor_info`, the block omitted
+  when the mesh does not want it; provisioning then writes
+  `neighbor_info.enabled false`. Floor 14400 s. `transmit_over_lora` is the
+  only field that costs airtime: false and the firmware swaps the destination
+  for `NODENUM_BROADCAST_NO_LORA`, delivering the beacon locally only.
+  rapa-nui runs 14400 on air, which `validate` reports as an R2 warning on
+  every run because portnum 71 has no declared flow behind it.
+* Measured with the repo's own `presets.time_on_air_ms` at MEDIUM_FAST, over
+  nine nodes and seven transmissions per broadcast: rapa-nui's NodeInfo at 2 h
+  is 0.27 % duty and its NeighborInfo at 4 h is 0.16 %, against **8.95 %** for
+  the 120 s device telemetry. The beacons are noise next to the study's own
+  flows, which is why the fast end of the allowed range is the right choice
+  rather than the slow one.
+
+Still not configured, and deliberately:
+
+* **Range Test** (`range_test`, portnum 66) — `enabled`, `sender` (0 = receive
+  only), `save` (`rangetest.csv` in flash, **ESP32 only**: the T-Beams, not the
+  nRF52840 SenseCAPs, and retrieval needs Wi-Fi, which this platform never
+  configures) and `clear_on_reboot`. Saturating the channel is its purpose, so
+  it belongs on a bench or on a mobile site survey, never on a mesh being
+  measured. The firmware stops the sender after 8 hours by itself.
+* **Traceroute** (portnum 70) — no config block exists; it is invoked per
+  command (`meshtastic --traceroute '!xxxxxxxx'`), one request per 30 s per
+  sending node, up to 8 hops per direction with per-hop SNR in 0.25 dB steps.
+  Nothing to provision. What is missing is a wrapper that runs it against a
+  deployment's refs and records the result as a measurement. A `CLIENT_MUTE`
+  radio never appears as an intermediate hop, so GW, D1 and D2 can be the
+  destination of a trace but never a waypoint.
+
+Neither of those two is a declared flow, so their portnums would land in
+`DecodeStats.unknown_portnum`: counted and named, but not attributable to any
+cadence — which is what hard rule 3 exists to prevent. Adding one as a flow
+means extending `FLOW_KINDS` (today `device`, `environment`, `position`) and
+`decode()` in the same change.

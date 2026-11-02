@@ -133,7 +133,7 @@ def spec(**kw):
     base = dict(region="ANZ", modem_preset="MEDIUM_FAST", channel_num=45,
                 channels=(rp.Channel(0, "p", "TEST_PSK_0"), rp.Channel(1, "s", "TEST_PSK_1")),
                 rebroadcast_mode="LOCAL_ONLY", position_precision=32, rx_boosted_gain=True,
-                eirp_caps=CAPS)
+                node_info_secs=10800, eirp_caps=CAPS)
     base.update(kw)
     return rp.RadioSpec(**base)
 

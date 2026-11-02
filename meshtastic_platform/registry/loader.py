@@ -20,7 +20,7 @@ from typing import Any
 import yaml
 
 from meshtastic_platform.decode import FLOW_KINDS
-from meshtastic_platform.radio.profile import Channel, RadioSpec
+from meshtastic_platform.radio.profile import Channel, NeighborInfo, RadioSpec
 from meshtastic_platform.radio.regulatory import Band
 from meshtastic_platform.registry.model import (
     TX_POWER_POLICIES, Antenna, Meta, Node, Pbx, Position, Registry, Sensor, Site,
@@ -292,9 +292,11 @@ def _node(r: _Reader, raw, where) -> Node | None:
 _META_KEYS = {"deployment", "kind", "description", "firmware_target", "cadence_scale"}
 _META_REQUIRED = {"deployment", "kind"}
 _RADIO_KEYS = {"region", "modem_preset", "channel_num", "channels", "rebroadcast_mode",
-               "position_precision", "rx_boosted_gain", "eirp_caps", "tx_power_policy"}
+               "position_precision", "rx_boosted_gain", "eirp_caps", "tx_power_policy",
+               "node_info_secs", "neighbor_info"}
 _RADIO_REQUIRED = {"region", "modem_preset", "channels", "rebroadcast_mode",
-                   "position_precision", "rx_boosted_gain"}
+                   "position_precision", "rx_boosted_gain", "node_info_secs"}
+_NEIGHBOR_INFO_KEYS = {"interval_secs", "transmit_over_lora"}
 
 
 def _band_pair(r: _Reader, value, where):
@@ -304,6 +306,31 @@ def _band_pair(r: _Reader, value, where):
         r.problems.append(f"{where}: expected [low, high] in MHz, got {value!r}")
         return None
     return float(value[0]), float(value[1])
+
+
+def _neighbor_info(r: _Reader, d) -> NeighborInfo | None:
+    """`radio.neighbor_info`, or None when the block is absent (module off).
+
+    Both fields are required when the block is there: `transmit_over_lora` is
+    what decides whether the beacon costs airtime, and defaulting it would
+    hide the only consequence the declaration has.
+    """
+    if "neighbor_info" not in d:
+        return None
+    raw = d.get("neighbor_info")
+    if raw is None:
+        r.problems.append("radio.neighbor_info: is null. A mesh that does not broadcast "
+                          "neighbour info must OMIT the block — null reads as a declaration "
+                          "with nothing in it")
+        return None
+    c = r.mapping(raw, "radio.neighbor_info", _NEIGHBOR_INFO_KEYS, _NEIGHBOR_INFO_KEYS)
+    if c is None:
+        return None
+    secs = r.get(c, "interval_secs", "radio.neighbor_info", int, nullable=False)
+    lora = r.get(c, "transmit_over_lora", "radio.neighbor_info", bool, nullable=False)
+    if secs is None or lora is None:
+        return None
+    return NeighborInfo(interval_secs=secs, transmit_over_lora=bool(lora))
 
 
 def _radio(r: _Reader, raw) -> RadioSpec | None:
@@ -344,6 +371,7 @@ def _radio(r: _Reader, raw) -> RadioSpec | None:
                                      r.get(c, "label", w, str) or ""))
     precision = r.get(d, "position_precision", "radio", int, nullable=False)
     boosted = r.get(d, "rx_boosted_gain", "radio", bool, nullable=False)
+    node_info = r.get(d, "node_info_secs", "radio", int, nullable=False)
     policy = r.get(d, "tx_power_policy", "radio", str) or "derived"
     if policy not in TX_POWER_POLICIES:
         r.problems.append(f"radio.tx_power_policy: {policy!r} is not one of "
@@ -357,8 +385,10 @@ def _radio(r: _Reader, raw) -> RadioSpec | None:
         rebroadcast_mode=r.get(d, "rebroadcast_mode", "radio", str, nullable=False) or "",
         position_precision=precision if precision is not None else 0,
         rx_boosted_gain=bool(boosted),
+        node_info_secs=node_info if node_info is not None else 0,
         eirp_caps=tuple(caps) if caps is not None else None,
         tx_power_policy=policy,
+        neighbor_info=_neighbor_info(r, d),
     )
 
 

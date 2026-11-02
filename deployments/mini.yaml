@@ -43,6 +43,10 @@ radio:
   rebroadcast_mode: LOCAL_ONLY
   position_precision: 32
   rx_boosted_gain: true
+  # Background beacons. 3 h is the firmware default, written out so a radio
+  # that arrives from another mesh is brought to it. No `neighbor_info` block
+  # means the module is written OFF.
+  node_info_secs: 10800
   # Chile, SUBTEL Res. Ex. 1.985/2017, read as EIRP.
   eirp_caps:
     - {band_mhz: [915, 928], eirp_dbm: 27, label: "SUBTEL j.3"}

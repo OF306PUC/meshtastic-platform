@@ -63,6 +63,36 @@ class TestNodePlan(unittest.TestCase):
         self.assertNotIn("lora.sx126x_rx_boosted_gain", tbeam)
         self.assertEqual(tbeam["lora.tx_power"], "20")
 
+    def test_beacons_are_written_even_when_off(self):
+        """A radio reused from another mesh must be brought to this one."""
+        f = flags(self.plan_for("N1"))
+        self.assertEqual(f["device.node_info_broadcast_secs"], "10800")
+        self.assertEqual(f["neighbor_info.enabled"], "false")
+        # Nothing else is written for a module that is off: no cadence, no
+        # airtime switch, so nothing suggests a beacon that will never be sent.
+        self.assertNotIn("neighbor_info.update_interval", f)
+        self.assertNotIn("neighbor_info.transmit_over_lora", f)
+
+    def test_neighbor_info_on_air_writes_all_three_fields(self):
+        data = field_registry()
+        data["radio"]["node_info_secs"] = 7200
+        data["radio"]["neighbor_info"] = {"interval_secs": 14400,
+                                          "transmit_over_lora": True}
+        f = flags(self.plan_for("N1", parse(data)))
+        self.assertEqual(f["device.node_info_broadcast_secs"], "7200")
+        self.assertEqual(f["neighbor_info.enabled"], "true")
+        self.assertEqual(f["neighbor_info.update_interval"], "14400")
+        self.assertEqual(f["neighbor_info.transmit_over_lora"], "true")
+
+    def test_the_beacon_cadence_is_not_scaled_on_the_bench(self):
+        """cadence_scale compresses measured flows; a beacon is not one of them."""
+        data = bench(field_registry())
+        data["radio"]["node_info_secs"] = 10800
+        data["meta"]["cadence_scale"] = 10
+        reg = parse(data)
+        f = flags(plan.node_steps(reg, reg.nodes[0], None, PSKS))
+        self.assertEqual(f["device.node_info_broadcast_secs"], "10800")
+
     def test_cadences_come_from_the_registry(self):
         f = flags(self.plan_for("N1"))
         self.assertEqual(f["telemetry.device_update_interval"], "120")

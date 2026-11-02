@@ -131,6 +131,32 @@ def position_settings(reg: Registry, node: Node) -> list[tuple[str, str]]:
     ]
 
 
+def beacon_settings(reg: Registry) -> list[tuple[str, str]]:
+    """The two background beacons: NodeInfo (always on) and NeighborInfo.
+
+    Neither is an `intervals` flow. NodeInfo cannot be switched off and every
+    node emits it, and NeighborInfo is floored by the firmware at four hours —
+    at that scale there is no cadence for an estimator to measure against.
+    They are mesh-wide policy, so they come from the `radio:` block.
+
+    Both are written explicitly, including the OFF case. Left alone, a radio
+    reused from another mesh keeps that mesh's cadence, or keeps putting
+    neighbour beacons on air, and nothing here would say so (rule 9). Writing
+    0 would be worse than saying nothing: the firmware reads 0 as "use the
+    built-in default", so the file and the radio would disagree by design.
+    """
+    out = [("device.node_info_broadcast_secs", str(reg.radio.node_info_secs))]
+    ni = reg.radio.neighbor_info
+    if ni is None:
+        return out + [("neighbor_info.enabled", "false")]
+    return out + [
+        ("neighbor_info.enabled", "true"),
+        ("neighbor_info.update_interval", str(ni.interval_secs)),
+        # The airtime switch: false keeps the beacon local (USB/BLE only).
+        ("neighbor_info.transmit_over_lora", _b(ni.transmit_over_lora)),
+    ]
+
+
 def serial_settings(node: Node) -> list[tuple[str, str]]:
     """The serial module: off, except on a pbx radio, where it is not touched.
 
@@ -193,6 +219,7 @@ def node_steps(reg: Registry, node: Node, port: str | None,
             ("device.role", node.role), ("device.rebroadcast_mode", p.rebroadcast_mode)])),
         *channel_steps(reg, cmd, psks),
         Step("telemetry", _sets(cmd, telemetry_settings(reg, node))),
+        Step("beacons (nodeinfo / neighborinfo)", _sets(cmd, beacon_settings(reg))),
         Step("GPS / position", _sets(cmd, position_settings(reg, node))),
         *([Step("serial", _sets(cmd, serial))] if (serial := serial_settings(node)) else []),
         *([Step("bluetooth", _sets(cmd, bt))] if (bt := bluetooth_settings(node)) else []),

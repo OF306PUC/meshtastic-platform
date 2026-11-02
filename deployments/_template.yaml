@@ -28,6 +28,21 @@ radio:
   rebroadcast_mode: LOCAL_ONLY   # ALL | ALL_SKIP_DECODING | LOCAL_ONLY | KNOWN_ONLY | NONE | CORE_PORTNUMS_ONLY
   position_precision: 32         # bits of lat/lon kept when a position is sent (32 = full)
   rx_boosted_gain: true          # SX126x only; ignored on other chips
+  # Background beacons, in seconds. These are NOT `intervals` flows: NodeInfo
+  # cannot be switched off and both run at hours scale, so there is no cadence
+  # for an estimator to measure against. Required, and never 0 — the firmware
+  # reads 0 as "use the built-in default", so the file would not describe the
+  # radio. Firmware floor 3600 s; default 10800 s.
+  node_info_secs: 10800
+  # OMIT the whole block to leave the adjacency beacon off (provisioning then
+  # writes it off). With it, both fields are required. Firmware floor 14400 s.
+  # `transmit_over_lora: false` keeps the beacon local (USB/BLE only), costing
+  # no airtime; true puts portnum 71 on air, which a channel-study
+  # receiver will count among the unattributed portnums. It also needs a
+  # primary channel that is not the public default one (name AND key).
+  # neighbor_info:
+  #   interval_secs: 14400
+  #   transmit_over_lora: false
   # Radiated-power caps (EIRP) that apply where the mesh operates. The most
   # permissive band containing the whole channel applies. [] if none apply.
   eirp_caps:

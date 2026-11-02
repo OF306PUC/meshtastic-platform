@@ -54,6 +54,37 @@ class Channel:
     psk_env: str               # environment variable holding the base64 key
 
 
+# The firmware's own floors, from src/mesh/Default.h at the deployments'
+# firmware_target. A smaller number in a deployment file does not fail: the
+# radio raises it and then reads back different for ever. Both are raised on
+# the path provisioning uses — NodeInfo in AdminModule, as the setting is
+# applied, and NeighborInfo in NodeDB (`getConfiguredOrMinimumValue`).
+MIN_NODE_INFO_SECS = 60 * 60            # min_node_info_broadcast_secs
+MIN_NEIGHBOR_INFO_SECS = 4 * 60 * 60    # min_neighbor_info_broadcast_secs
+# Every interval reaches the scheduler through Default::getConfiguredOrDefaultMs,
+# which converts to milliseconds and clamps at INT32_MAX ms. Anything above this
+# many seconds is therefore the same interval: ~24.86 days, not "never".
+MAX_INTERVAL_SECS = 2147483647 // 1000
+
+
+@dataclass(frozen=True)
+class NeighborInfo:
+    """`radio.neighbor_info`: the adjacency beacon, when a mesh wants one.
+
+    The block ABSENT from the deployment file means the module is off, and
+    provisioning then writes it off rather than leaving it alone — a radio
+    reused from another mesh arrives with whatever it was given there.
+
+    `transmit_over_lora` is the only field that costs airtime. With it false
+    the firmware swaps the destination for NODENUM_BROADCAST_NO_LORA and the
+    beacon is only delivered locally, over USB or BLE; nothing reaches the
+    channel. That is why it is declared separately from the cadence instead of
+    being implied by it.
+    """
+    interval_secs: int
+    transmit_over_lora: bool
+
+
 @dataclass(frozen=True)
 class RadioSpec:
     """The `radio:` block of a deployment, as declared."""
@@ -64,12 +95,17 @@ class RadioSpec:
     rebroadcast_mode: str
     position_precision: int
     rx_boosted_gain: bool
+    # Identity beacon. Not an `intervals` flow: every node emits it, it cannot
+    # be switched off, and at hours-scale it is not a cadence any estimator
+    # measures against — it is mesh-wide policy, like the rebroadcast mode.
+    node_info_secs: int
     eirp_caps: tuple[regulatory.Band, ...]
     # "derived" (the default): tx_power comes from the antenna gain, the caps
     # and the chip, and a node's tx_power_dbm must equal it. "declared": the
     # number in the file is written to the radio as it stands, and V2 reports
     # every deviation as a warning instead of refusing the file.
     tx_power_policy: str = "derived"
+    neighbor_info: NeighborInfo | None = None   # None = the module is off
 
 
 @dataclass(frozen=True)
@@ -110,6 +146,14 @@ class RadioProfile:
     @property
     def rx_boosted_gain(self) -> bool:
         return self.spec.rx_boosted_gain
+
+    @property
+    def node_info_secs(self) -> int:
+        return self.spec.node_info_secs
+
+    @property
+    def neighbor_info(self) -> NeighborInfo | None:
+        return self.spec.neighbor_info
 
     @property
     def position_broadcast_smart_enabled(self) -> bool:

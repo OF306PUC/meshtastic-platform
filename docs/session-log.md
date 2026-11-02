@@ -15,25 +15,262 @@ Entry format:
 ### Outcomes
 - ...
 ### Next steps / open questions
-- Las etiquetas físicas de N1-N6 son los propios refs (usuario, 2026-10-30),
-  así que `label:` queda en null a propósito: una etiqueta igual al `ref` sería
-  una segunda copia libre de desincronizarse, y además metería N1-N6 en la
-  lista de palabras prohibidas de `test_hard_rules`. Anotado como comentario en
-  el encabezado de los nodos de `rapa-nui.yaml`. GW, D1 y D2 también llevan su
-  ref como etiqueta (usuario, 2026-10-30), así que `label:` queda en null en
-  todo el archivo. Queda por saber qué caja es N3.
-- **URGENTE — secreto en git:** `deployments/psks-san-joaquin-longturbo.txt`
-  está **trackeado y no ignorado**, con los dos PSKs reales del campus
-  (`LORA_TELEMETRY_CHANNEL_PSK`, `LORA_MSG_CHANNEL_PSK`, 32 bytes cada uno).
-  Entró en el commit `cebcf4f`. Viola la regla 8 (PSKs solo en `.env`). Borrar
-  el archivo ahora NO lo saca del historial: hay que rotar las dos claves o
-  reescribir el historial. Pendiente de decisión del usuario.
-- Quedó huérfano ese mismo `.txt` al borrarse `san-joaquin-longturbo.yaml`.
-- `docs/testbeds/san-joaquin.md`, `.env.example` y el comentario de
-  `bench-lilygo.yaml:37` siguen mencionando san-joaquin; se dejan hasta saber
-  cómo se llama el deployment que lo reemplace.
 - ...
 ```
+
+---
+
+## 2026-11-02 — Beacons declarados: NodeInfo y NeighborInfo en el bloque `radio:`
+
+**Time:** (aprox)
+**User request:** cuánto costaría soportar `neighbor_info.transmit_over_lora`;
+si hay que dejarlo registrado; y dejar los intervalos "en el valor máximo".
+Después: «Sí, implementálo. Yo dejaría 2 y 4 horas.»
+
+### Actions taken
+- Medidos los dos moldes que ya existían antes de proponer nada: un ajuste a
+  nivel `radio:` (`rx_boosted_gain`) toca **6** archivos de producción; un
+  flujo declarado en `intervals` (`environment`) toca **21**, porque arrastra
+  `records.py`, `gaps.py`, los tres sinks, `plot_session.py` y los goldens.
+- Verificado contra `v2.7.26.54e0d8d`: `min_node_info_broadcast_secs` 3600,
+  `default_node_info_broadcast_secs` 10800, `min_neighbor_info_broadcast_secs`
+  14400, `default_neighbor_info_broadcast_secs` 21600. `NodeDB` sube en
+  silencio el intervalo de NeighborInfo al mínimo
+  (`getConfiguredOrMinimumValue`), así que un número menor en el archivo
+  leería distinto para siempre.
+- Hallazgo que cambia la pregunta del usuario: **el máximo no es "nunca"**.
+  `Default::getConfiguredOrDefaultMs` pasa por `secondsToMsClamped`, que topa
+  en `INT32_MAX` **milisegundos** ≈ 24,86 días. Cualquier valor por encima de
+  2 147 483 s es el mismo intervalo.
+- Calculado el costo real con la herramienta del propio repo
+  (`presets.time_on_air_ms`), MEDIUM_FAST, 9 nodos, 7 transmisiones por
+  broadcast: telemetría `device` @120 s = **8,95 %** de duty; NodeInfo @3 h =
+  0,18 %; NeighborInfo @4 h = 0,16 %.
+- Verificada y **descartada** una sospecha propia antes de afirmarla: creía que
+  con `LOCAL_ONLY` un NodeInfo muy lento rompería el relevo. Falso — el
+  requisito de `has_user` está en `perhapsDecode` y aplica solo a
+  `KNOWN_ONLY` (`Router.cpp:428`).
+- Confirmado por introspección del protobuf instalado que las cuatro rutas de
+  configuración existen: `device.node_info_broadcast_secs`,
+  `neighbor_info.{enabled,update_interval,transmit_over_lora}`.
+- Implementado: `profile.py` (dataclass `NeighborInfo`, campos y las tres
+  constantes del firmware), `loader.py` (claves, requeridos, parser del bloque
+  opcional), `plan.py` (`beacon_settings`, un paso nuevo), `inspector.py`
+  (cuatro campos nuevos en las tablas de lectura + comparación reusando el
+  plan), `validate.py` (código **R2**), los tres deployments, la plantilla y el
+  README. 12 tests nuevos: 222 → **234**, todos en verde.
+
+### Decisions
+- **Me retracté de mi propia recomendación anterior.** Había dicho que debía ir
+  como flujo en `intervals` porque es periódico y cuesta airtime. Va en
+  `radio:`. Tres razones: lo que hace a un flow un flow aquí es que el estudio
+  *estime gaps* contra él, y con 6 paquetes por día no hay nada que estimar;
+  `intervals` se divide por `cadence_scale`, que en banco empujaría el valor
+  bajo el piso del firmware y dejaría a `inspect` reportando drift falso para
+  siempre; y NodeInfo no se puede apagar, así que no encaja en la regla
+  «ausente = no lo emite».
+- Cadencias elegidas por el usuario: **NodeInfo 7200 s, NeighborInfo 14400 s**
+  (el piso del firmware) con `transmit_over_lora: true`. Contra su idea inicial
+  de poner ambos al máximo, que para NeighborInfo se anula a sí mismo: emitiría
+  1 paquete cada 25 días, y `cleanUpNeighbors()` borra un vecino recién a 2× el
+  intervalo, así que la tabla acumularía vecinos muertos ~50 días.
+- `mini` y `bench-lilygo` quedan en 10800 (el default del firmware, escrito
+  explícito) y sin bloque `neighbor_info`.
+- **Se escribe también el caso APAGADO** (`neighbor_info.enabled false`), como
+  ya se hacía con `serial`. Escribir 0 sería peor que no escribir: el firmware
+  lee 0 como «usá el default».
+- `validate` emite una **advertencia R2 en cada corrida** cuando
+  `transmit_over_lora` está encendido en un deployment `field`. No es un
+  defecto: el portnum 71 va al aire sin flujo declarado que lo explique, y la
+  regla 9 pide decirlo en voz alta cada vez.
+- **No** se implementó el chequeo de «canal primario no-default» que exige el
+  firmware para `transmit_over_lora`: con `psk_env` obligatorio y `channel_num`
+  explícito, la condición es inalcanzable en este repo. Quedó documentada en la
+  plantilla en vez de como código muerto.
+
+### Outcomes
+- `python configure.py validate --all` limpio en los tres deployments; la única
+  novedad es la advertencia R2 de rapa-nui, que es intencional.
+- El paso nuevo en el plan de N1:
+  `--set device.node_info_broadcast_secs 7200 --set neighbor_info.enabled true
+  --set neighbor_info.update_interval 14400 --set neighbor_info.transmit_over_lora true`
+- La regla 2 atajó un error mío en vivo: había escrito «the phone and MQTT» en
+  dos comentarios de código. `tests/test_hard_rules.py` los rechazó; reescritos
+  sin nombrar infraestructura aguas abajo.
+- `docs/project-overview.md` reescribió su subsección de módulos: NeighborInfo
+  pasó de «no configurable» a configurado, y quedan Range Test y Traceroute.
+
+### Next steps / open questions
+- **La copia del gateway quedó desincronizada**: los tres deployments
+  cambiaron y la regla 2 dice que el apareo es por SHA-256 idéntico. Hay que
+  copiarlos a mano.
+- Nada se ha commiteado.
+- Falta decidir si `receiver.py` debería reconocer el portnum 71 como algo
+  esperado en vez de contarlo en `unknown_portnum`. Hacerlo bien significa
+  extender `FLOW_KINDS`, que es el cambio grande que se evitó hoy.
+- La sección «Current status» del overview sigue fechada 2026-10-27 y ya está
+  en el límite de 2 sesiones que fija CLAUDE.md.
+
+---
+
+## 2026-11-02 — Pareo BLE sin pantalla: el PIN fijo
+
+**Time:** (aprox)
+**User request:** las radios LilyGO no traen LCD, así que no hay dónde leer el
+número de pareo que pide la app de Meshtastic en el celular.
+
+### Actions taken
+- Verificado contra el protobuf instalado, no contra la memoria:
+  `Config.BluetoothConfig` tiene `enabled`, `mode` y `fixed_pin`, y los modos
+  son `RANDOM_PIN` (0), `FIXED_PIN` (1), `NO_PIN` (2). `fixed_pin` es `uint32`.
+- Revisado qué escribe hoy la plataforma: `plan.bluetooth_settings()` solo pone
+  `bluetooth.enabled true` (y nada en una radio `pbx`), e `inspector.py` solo
+  relee `enabled`. El modo de pareo no se escribe ni se verifica.
+- Confirmado en la documentación de Meshtastic que el default lo elige el
+  firmware en el PRIMER arranque según si detecta pantalla: con pantalla
+  `RANDOM_PIN`, sin pantalla `FIXED_PIN` con `123456`. Y que el PIN aleatorio
+  sí se escribe al log serial, que es la salida cuando una radio quedó atrapada
+  en `RANDOM_PIN`.
+- **ACK implícito y reintentos** (el usuario trajo su propia lectura de la capa
+  2 para que la revisara). Verificado contra `meshtastic/firmware` en `master`,
+  no contra la memoria: `ReliableRouter::shouldFilterReceived` compara
+  `p->from == getNodeNum()`, registra «Generate implicit ack» y recién ahí
+  llama a `stopRetransmission(key)` — **solo si la copia llegó por LoRa**
+  (`TRANSPORT_LORA`); un ACK implícito que vuelve por MQTT no detiene los
+  reintentos. `NextHopRouter.h` declara `NUM_RELIABLE_RETX = 3` («the number of
+  retransmissions the original sender will do») y `NUM_INTERMEDIATE_RETX = 2`
+  («actually 1 less than this»); el constructor de `PendingPacket` hace
+  `numRetransmissions - 1` «because we assume the user just did the first
+  send», así que 3 son 3 transmisiones al aire, no 1+3.
+- **Figura `ack-retry` — construida y luego descartada** (el usuario: «no
+  necesitaba el ack-retry»). No queda en el repositorio; lo que sigue es el
+  registro de lo que mostraba, porque el contenido verificado vale aunque la
+  figura no. Era la línea de tiempo del propio emisor de un paquete con
+  `want_ack`: los tres envíos, el `T_retx` entre cada uno, y el NAK local
+  `MAX_RETRANSMIT` un `T_retx` después del tercero. Debajo, las cuatro cosas que
+  pueden llegar durante una espera y cuál detiene el reintento: reemisión del
+  vecino por LoRa (sí), ACK/NAK real del destino (sí, solo DM), la misma copia
+  por MQTT (**no**), nada. Dos recuadros cierran: la aritmética del contador y
+  por qué un vecino `CLIENT_MUTE` nunca produce un ACK implícito.
+- Nada se re-derivó: $T_\mathrm{retx}$ y $\sigma$ se referencian a
+  `channel-access-model`, y la decisión de relevo a `rebroadcast`. Un número en
+  dos figuras es un número libre de desincronizarse.
+- **Corrección del usuario, y es la correcta:** el ACK implícito **no es un ACK
+  que alguien devuelva**. La primera versión de la figura decía «`sendAckNak`
+  up to the phone», que se puede leer como si algo volviera por el aire.
+  Verificado en el tag fijado: `RoutingModule::sendAckNak` termina en
+  `router->sendLocal(p)` («we sometimes send directly to the local node»), y
+  `sendLocal` corta con `if (isToUs(p)) { ... enqueueReceivedMessage(p); return
+  ERRNO_OK; }` bajo el comentario «No need to deliver externally if the
+  destination is the local node». `Router::send()` con un paquete dirigido al
+  nodo local es directamente un `LOG_ERROR("BUG! ...")`. O sea: el firmware del
+  emisor **se fabrica** el ACK y lo entrega por USB/BLE al teléfono; lo único
+  que viajó por el aire fue la reemisión del vecino. Este es el hallazgo que
+  conviene conservar de todo el episodio de la figura.
+- **Cobertura de módulos** (el usuario preguntó si el módulo NeighborInfo ya se
+  puede configurar aquí). No, y la brecha es de tres capas, no de un `--set`:
+  `plan.py` solo escribe `telemetry`, `position`, `serial` y `bluetooth`;
+  `inspector.CHECKS` relee esos mismos cuatro; y `FLOW_KINDS` en
+  `decode/__init__.py` es `("device", "environment", "position")`, así que
+  `loader.py:218` rechazaría una cadencia llamada `neighborinfo` como *unknown
+  flow kind*. Aguas abajo, el portnum 71 cae hoy en `unknown_portnum`: contado
+  y nombrado, pero sin flujo declarado que lo explique.
+- Verificado contra el protobuf instalado y la documentación vigente, no contra
+  la memoria: `NeighborInfoConfig` tiene exactamente `enabled` (1),
+  `update_interval` (2, default 21600 s, mínimo de firmware 14400 s) y
+  `transmit_over_lora` (3). El tercero es el único que cuesta airtime — por
+  defecto el módulo alimenta la app conectada y MQTT, y no pone nada al aire.
+  Exige firmware ≥ 2.5.13 y un canal primario que no sea el público por
+  defecto (rapa-nui cumple ambas). La razón que da la documentación para
+  tenerlo apagado no es el airtime: es que **no alimenta el ruteo**, lo que
+  encaja con que el `next_hop` se aprende del `request_id` de lo que vuelve.
+- `RangeTestConfig`: `enabled`, `sender` (segundos entre paquetes, 0 = solo
+  recibir), `save` (escribe `rangetest.csv` en flash, **solo ESP32** — las
+  T-Beam sí, las SenseCAP nRF52840 no) y `clear_on_reboot`. El firmware apaga
+  el emisor solo a las 8 horas.
+- Traceroute **no tiene bloque de configuración**: no hay nada que
+  aprovisionar. Se invoca por comando (`meshtastic --traceroute '!xxxxxxxx'`),
+  con un límite de una petición cada 30 s por nodo emisor, hasta 8 saltos por
+  sentido y SNR por salto en pasos de 0,25 dB. Desde firmware 2.5 también
+  registra la ruta de vuelta. Los nodos sin la llave del canal reenvían pero
+  aparecen como saltos desconocidos (`0xFFFFFFFF`, `(?dB)` en el CLI).
+
+### Decisions
+- El problema es de los nueve nodos, no solo de las LilyGO: los SenseCAP P1 Pro
+  tampoco tienen pantalla. Lo que cambia entre unos y otros es que los SenseCAP
+  nunca vieron una, así que lo más probable es que estén en el `123456` de
+  fábrica — público y compartido por todo el despliegue.
+- El usuario usa `FIXED_PIN` **a mano por ahora** ("por mientras"), con el
+  `meshtastic` CLI: conocer el PIN es el requisito, y escribirlo explícitamente
+  deja de depender de lo que el firmware adivinó en el primer boot.
+- El PIN va en `.env` (regla 8), bajo el nombre de variable que usaría la
+  automatización futura, para que el paso manual y el automático no se
+  contradigan. Nunca en `deployments/*.yaml` ni en la guía SASIPA: ahí va el
+  nombre de la variable.
+- Se elige un PIN de seis dígitos que no empiece en cero: `fixed_pin` es
+  `uint32`, y un cero a la izquierda no sobrevive el viaje de ida y vuelta de
+  forma evidente. Un `--get bluetooth.fixed_pin` después de escribirlo lo
+  confirma.
+- **Aplazado** (ofrecido, no implementado): llevar esto al registro con
+  `radio.ble_pin_env`, que `provision` escriba `bluetooth.mode FIXED_PIN` +
+  `bluetooth.fixed_pin` solo cuando el deployment lo declare (y lo diga cuando
+  no), y que `inspect` compare modo y PIN sin imprimirlo, como ya hace
+  `channel_psks` con las llaves.
+- **Registrados como mejoras futuras** (decisión del usuario, no implementadas):
+  NeighborInfo, Range Test y Traceroute. Quedan escritas en
+  `docs/project-overview.md`, bajo «Known constraints», porque describen lo que
+  la plataforma NO hace hoy, no hacia dónde va el despliegue.
+- Si NeighborInfo o Range Test llegan a implementarse, van como flujo declarado
+  en `intervals` y no como un bloque suelto en `radio:`: son periódicos y
+  cuestan airtime, que es el criterio de la regla 3. Eso obliga a extender
+  `FLOW_KINDS` y `decode()` en el mismo cambio, o el receptor contaría paquetes
+  que ninguna cadencia declarada explica.
+- Range Test es lo contrario de un flujo de producción: satura el canal a
+  propósito. Va en banco, con `cadence_scale`, nunca sobre una malla que se
+  está midiendo.
+
+### Outcomes
+- Ningún cambio de código. La plataforma sigue sin escribir el modo de pareo.
+- **Ninguna figura nueva queda en el repositorio.** `ack-retry.tex` se
+  construyó y se descartó; las referencias que lo nombraban como figura
+  compañera se revirtieron en `rebroadcast.tex` y `channel-access-model.tex`,
+  para que ningún archivo apunte a algo que no existe.
+- Sí sobrevive un arreglo real encontrado de paso: `rebroadcast.tex` apuntaba
+  como figura compañera a `channel-access.tex`, un archivo que se partió en
+  cinco y ya no existe; ahora nombra al conjunto de cinco. Sigue compilando.
+- Arreglado un defecto del propio `session-log.md`: los "Next steps" del
+  2026-10-30 se habían escrito DENTRO del bloque de ejemplo "Entry format", no
+  en la entrada. Movidos a su entrada, y el ejemplo vuelve a ser un ejemplo. De
+  paso, la viñeta del secreto decía que el `.txt` seguía trackeado; se corrigió
+  al estado real: borrado en `9d17270`, pero vivo en el historial.
+
+### Next steps / open questions
+- Dejar `bluetooth.mode` fuera de la plataforma es una divergencia silenciosa
+  (regla 9): dos T-Beam idénticas pueden quedar en modos distintos y ni
+  `provision` ni `inspect` lo mencionan. Mientras no se implemente
+  `radio.ble_pin_env`, es un paso manual que hay que recordar por nodo.
+- Un solo PIN para todo el despliegue, no uno por nodo: nueve variables en
+  `.env` es peor que una. Si alguna vez importa aislar nodos, hay que repensarlo.
+- La guía SASIPA todavía no documenta el pareo BLE.
+- Consecuencia de `rebroadcast_mode: LOCAL_ONLY` + GW/D1/D2 en `CLIENT_MUTE`:
+  un broadcast **con `want_ack`** cuyo único oyente sea una de esas tres
+  radios nunca recibe ACK implícito (fallan la compuerta `isRebroadcaster()`),
+  así que el emisor quema sus tres transmisiones siempre. No afecta al estudio
+  de canal: las cadencias de telemetría y posición salen sin `want_ack`. Sí
+  afecta a los mensajes de texto. Un DM *dirigido* a GW no tiene el problema:
+  ser destino y no relevar son cosas distintas, y el destino sí emite ACK real.
+- Los tres módulos comparten la misma divergencia silenciosa que
+  `bluetooth.mode`: `inspect` no los relee, así que una radio reusada que
+  llegue con Range Test emitiendo pasaría la verificación sin una palabra. El
+  arreglo barato, antes de escribir nada, es añadirlos a `inspector.CHECKS`
+  como «debe estar apagado» — verificar es más barato que aprovisionar y cierra
+  el agujero de la regla 9.
+- `docs/project-overview.md` dice «Current status (2026-10-27)», dos sesiones
+  atrás: está en el límite que fija CLAUDE.md. La próxima sesión que lo toque
+  debería refrescar esa sección entera, no solo añadirle.
+- Traceroute es la única de las tres que no necesita aprovisionamiento sino una
+  herramienta: un subcomando que lo corra contra los refs de un deployment y
+  guarde la ruta y los SNR como medición. Sin decidir.
 
 ---
 
@@ -158,6 +395,23 @@ serie tras un reboot o desenchufe; si D1/D2 deberían tener campos `ble` y
 - Si meshpbx necesita que el registro diga dónde está su radio, el lugar es el
   bloque `pbx` (un registro, nunca escrito): `link`, `uart_baud`, dirección BLE.
   Decisión pendiente del proyecto PBX.
+- Las etiquetas físicas de N1-N6 son los propios refs (usuario, 2026-10-30),
+  así que `label:` queda en null a propósito: una etiqueta igual al `ref` sería
+  una segunda copia libre de desincronizarse, y además metería N1-N6 en la
+  lista de palabras prohibidas de `test_hard_rules`. Anotado como comentario en
+  el encabezado de los nodos de `rapa-nui.yaml`. GW, D1 y D2 también llevan su
+  ref como etiqueta (usuario, 2026-10-30), así que `label:` queda en null en
+  todo el archivo. Queda por saber qué caja es N3.
+- **URGENTE — secreto en el historial:** `deployments/psks-san-joaquin-longturbo.txt`
+  llevaba los dos PSKs reales del campus (`LORA_TELEMETRY_CHANNEL_PSK`,
+  `LORA_MSG_CHANNEL_PSK`, 32 bytes cada uno) **trackeados y no ignorados**
+  desde el commit `cebcf4f` — regla 8. El archivo se borró y el patrón de
+  `.gitignore` se amplió a `psks*.txt` en `9d17270`, pero eso NO lo saca del
+  historial: siguen pendientes rotar las dos claves o reescribir el historial.
+  Decisión del usuario.
+- `docs/testbeds/san-joaquin.md`, `.env.example` y el comentario de
+  `bench-lilygo.yaml:37` siguen mencionando san-joaquin; se dejan hasta saber
+  cómo se llama el deployment que lo reemplace.
 
 ---
 

@@ -31,8 +31,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from meshtastic_platform.provision.identity import DeviceIdentity, mac_from_nodeinfo
-from meshtastic_platform.provision.plan import (GPS_UPDATE_INTERVAL_S, bluetooth_settings,
-                                                serial_settings)
+from meshtastic_platform.provision.plan import (GPS_UPDATE_INTERVAL_S, beacon_settings,
+                                                bluetooth_settings, serial_settings)
 from meshtastic_platform.radio import profile as radio_profile
 from meshtastic_platform.radio import regulatory
 from meshtastic_platform.registry import hardware as hw
@@ -43,6 +43,7 @@ NA = "n/a"   # a field this firmware/library version does not have
 # (section, field, is_enum) read from localConfig / moduleConfig.
 LOCAL_FIELDS = [
     ("device", "role", True), ("device", "rebroadcast_mode", True),
+    ("device", "node_info_broadcast_secs", False),
     ("lora", "region", True), ("lora", "modem_preset", True), ("lora", "use_preset", False),
     ("lora", "channel_num", False), ("lora", "hop_limit", False), ("lora", "tx_power", False),
     ("lora", "sx126x_rx_boosted_gain", False), ("lora", "override_frequency", False),
@@ -58,10 +59,19 @@ MODULE_FIELDS = [
     ("telemetry", "environment_update_interval", False),
     ("serial", "enabled", False), ("serial", "mode", True), ("serial", "txd", False),
     ("serial", "rxd", False), ("serial", "baud", True), ("serial", "timeout", False),
+    ("neighbor_info", "enabled", False), ("neighbor_info", "update_interval", False),
+    ("neighbor_info", "transmit_over_lora", False),
 ]
 
 
 # ── Small helpers ─────────────────────────────────────────────────────────────
+
+def _as_read_back(want: str) -> bool | int:
+    """A planned value (always a CLI string) in the type the radio reports it as."""
+    if want in ("true", "false"):
+        return want == "true"
+    return int(want)
+
 
 def enum_name(msg, name: str) -> str:
     """Symbolic name of a protobuf enum field via reflection (survives library moves)."""
@@ -321,6 +331,14 @@ def check_local(s: Snapshot, reg: Registry, node: Node | None, *, ref: str | Non
     if node.chip.name == "sx1262":
         out.append(_eq("registry", f"{r} lora.sx126x_rx_boosted_gain", p.rx_boosted_gain,
                        s.get("lora.sx126x_rx_boosted_gain")))
+
+    # The background beacons. Read back whether or not the deployment turns
+    # NeighborInfo on: a radio arriving with it on from another mesh is exactly
+    # the silent divergence this check exists for.
+    for key, want in beacon_settings(reg):
+        out.append(_eq("registry", f"{r} {key}", _as_read_back(want), s.get(key),
+                       "a beacon cadence the deployment does not declare puts packets on "
+                       "air that no cadence explains"))
 
     # No serial module, except on a pbx radio: its link is the PBX project's.
     for key, want in serial_settings(node):

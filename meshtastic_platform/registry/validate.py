@@ -8,6 +8,8 @@ later.
 | #   | Invariant                                                      |
 |-----|----------------------------------------------------------------|
 | R   | the `radio:` block resolves: region, preset, slot, channels    |
+| R2  | beacon cadences within the firmware's limits, and a neighbour  |
+|     | beacon put on air is reported on every run                     |
 | V1  | node_id unique and shaped '!' + 8 hex; refs/labels unique      |
 | V2  | tx_power within the chip's valid settings and the declared     |
 |     | EIRP cap, and equal to what the deployment's policy derives    |
@@ -30,6 +32,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from meshtastic_platform.radio import profile as radio_profile
 from meshtastic_platform.radio import regulatory
 from meshtastic_platform.registry import hardware as hw
 from meshtastic_platform.registry.model import (
@@ -122,6 +125,17 @@ def validate(reg: Registry) -> list[Finding]:
         if profile is not None:
             note = f" — without it the firmware hashes the channel name to {profile.slot.describe()}"
         c.error("V7", "radio", "channel_num must be explicit for a live deployment" + note)
+    # R2: the beacons. Below the firmware's floor the radio silently uses a
+    # different number; above the clamp every value is the same ~24.86 days.
+    _beacon(c, "radio.node_info_secs", spec.node_info_secs,
+            radio_profile.MIN_NODE_INFO_SECS)
+    if spec.neighbor_info is not None:
+        _beacon(c, "radio.neighbor_info.interval_secs", spec.neighbor_info.interval_secs,
+                radio_profile.MIN_NEIGHBOR_INFO_SECS)
+        if spec.neighbor_info.transmit_over_lora and m.kind == "field":
+            c.warn("R2", "radio", "neighbor_info.transmit_over_lora is on: adjacency "
+                                  "beacons go ON AIR, and a receiver counts portnum 71 "
+                                  "among the unattributed portnums (no declared flow)")
     if m.kind == "field" and spec.eirp_caps is None:
         c.error("V2", "radio", "eirp_caps must be declared for a field deployment "
                                "(the radiated-power caps where it operates; [] if none apply)")
@@ -148,6 +162,18 @@ def validate(reg: Registry) -> list[Finding]:
                              f"propagated to every reception record — never compare them "
                              f"without grouping by mcu")
     return c.findings
+
+
+def _beacon(c: _Collector, where: str, secs: int, minimum: int) -> None:
+    """One beacon cadence against the firmware's floor and its interval clamp."""
+    if secs < minimum:
+        c.error("R2", "radio", f"{where} is {secs} s, below the firmware minimum of "
+                               f"{minimum} s: the radio would coerce it and read back "
+                               f"different on every inspect")
+    elif secs > radio_profile.MAX_INTERVAL_SECS:
+        c.warn("R2", "radio", f"{where} is {secs} s, above the firmware's interval clamp "
+                              f"({radio_profile.MAX_INTERVAL_SECS} s): every larger value is "
+                              f"the same ~24.86 days, so this is not 'never'")
 
 
 def _node(c: _Collector, reg: Registry, n: Node, profile, seen) -> None:

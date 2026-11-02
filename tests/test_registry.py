@@ -30,6 +30,7 @@ RADIO = {
     "rebroadcast_mode": "LOCAL_ONLY",
     "position_precision": 32,
     "rx_boosted_gain": True,
+    "node_info_secs": 10800,          # no neighbor_info block: the module is off
     "eirp_caps": [{"band_mhz": [915, 928], "eirp_dbm": 27, "label": "rule A"},
                   {"band_mhz": [925, 928], "eirp_dbm": 30, "label": "rule B"}],
 }
@@ -122,6 +123,54 @@ class TestLoaderIsStrict(unittest.TestCase):
             with self.assertRaises(RegistryError) as ctx:
                 parse(data)
             self.assertIn("ABSENT", str(ctx.exception))
+
+    def test_node_info_secs_is_required(self):
+        """Left out, the radio keeps whatever cadence it arrived with."""
+        data = field_registry()
+        del data["radio"]["node_info_secs"]
+        with self.assertRaises(RegistryError) as ctx:
+            parse(data)
+        self.assertIn("node_info_secs", str(ctx.exception))
+
+    def test_neighbor_info_is_omitted_not_nulled(self):
+        """Like a flow a node does not emit: absent, never null."""
+        data = field_registry()
+        data["radio"]["neighbor_info"] = None
+        with self.assertRaises(RegistryError) as ctx:
+            parse(data)
+        self.assertIn("OMIT", str(ctx.exception))
+
+    def test_neighbor_info_needs_both_fields(self):
+        """transmit_over_lora is the airtime decision; it is never defaulted."""
+        data = field_registry()
+        data["radio"]["neighbor_info"] = {"interval_secs": 14400}
+        with self.assertRaises(RegistryError) as ctx:
+            parse(data)
+        self.assertIn("transmit_over_lora", str(ctx.exception))
+
+    def test_beacons_below_the_firmware_floor_are_errors(self):
+        """The radio would coerce them, so the file would never match the radio."""
+        data = field_registry()
+        data["radio"]["node_info_secs"] = 1800              # floor is 3600
+        self.assertIn("R2", codes(data))
+        data = field_registry()
+        data["radio"]["neighbor_info"] = {"interval_secs": 7200,     # floor is 14400
+                                          "transmit_over_lora": False}
+        self.assertIn("R2", codes(data))
+
+    def test_an_interval_above_the_clamp_warns_it_is_not_never(self):
+        data = field_registry()
+        data["radio"]["node_info_secs"] = 2 ** 31 - 1
+        self.assertIn("R2", codes(data, level="warning"))
+        self.assertNotIn("R2", codes(data))
+
+    def test_neighbor_info_on_air_is_a_warning_even_when_valid(self):
+        """It is legal, and it still puts a flow on air that no cadence declares."""
+        data = field_registry()
+        data["radio"]["neighbor_info"] = {"interval_secs": 14400,
+                                          "transmit_over_lora": True}
+        self.assertEqual(codes(data), set())
+        self.assertIn("R2", codes(data, level="warning"))
 
     def test_unknown_flow_kind_is_rejected(self):
         data = field_registry()
