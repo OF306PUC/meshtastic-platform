@@ -150,15 +150,32 @@ def beacon_settings(reg: Registry) -> list[tuple[str, str]]:
     a value that reads back as 0, not the "use the built-in default" it would
     mean on a running module.
     """
-    out = [("device.node_info_broadcast_secs", str(reg.radio.node_info_secs))]
+    return node_info_settings(reg) + neighbor_info_settings(reg)
+
+
+def node_info_settings(reg: Registry) -> list[tuple[str, str]]:
+    """The NodeInfo cadence alone: it lives in `config.device`."""
+    return [("device.node_info_broadcast_secs", str(reg.radio.node_info_secs))]
+
+
+def neighbor_info_settings(reg: Registry) -> list[tuple[str, str]]:
+    """The NeighborInfo module alone: it lives in `moduleConfig.neighbor_info`.
+
+    Kept apart from the NodeInfo cadence because the CLI decides what to do by
+    how many config SECTIONS one invocation touches: with more than one it
+    wraps the writes in a settings transaction (`beginSettingsTransaction` …
+    `commitSettingsTransaction`), which no other step here triggers. This
+    repository already lost `device.rebroadcast_mode` once to settings combined
+    in a single command, so the beacons are written one section at a time.
+    """
     ni = reg.radio.neighbor_info
     if ni is None:
-        return out + [
+        return [
             ("neighbor_info.enabled", "false"),
             ("neighbor_info.update_interval", "0"),
             ("neighbor_info.transmit_over_lora", "false"),
         ]
-    return out + [
+    return [
         ("neighbor_info.enabled", "true"),
         ("neighbor_info.update_interval", str(ni.interval_secs)),
         # The airtime switch: false keeps the beacon local (USB/BLE only).
@@ -228,7 +245,8 @@ def node_steps(reg: Registry, node: Node, port: str | None,
             ("device.role", node.role), ("device.rebroadcast_mode", p.rebroadcast_mode)])),
         *channel_steps(reg, cmd, psks),
         Step("telemetry", _sets(cmd, telemetry_settings(reg, node))),
-        Step("beacons (nodeinfo / neighborinfo)", _sets(cmd, beacon_settings(reg))),
+        Step("nodeinfo beacon", _sets(cmd, node_info_settings(reg))),
+        Step("neighborinfo beacon", _sets(cmd, neighbor_info_settings(reg))),
         Step("GPS / position", _sets(cmd, position_settings(reg, node))),
         *([Step("serial", _sets(cmd, serial))] if (serial := serial_settings(node)) else []),
         *([Step("bluetooth", _sets(cmd, bt))] if (bt := bluetooth_settings(node)) else []),
