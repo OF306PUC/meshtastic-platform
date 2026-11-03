@@ -68,10 +68,11 @@ class TestNodePlan(unittest.TestCase):
         f = flags(self.plan_for("N1"))
         self.assertEqual(f["device.node_info_broadcast_secs"], "10800")
         self.assertEqual(f["neighbor_info.enabled"], "false")
-        # Nothing else is written for a module that is off: no cadence, no
-        # airtime switch, so nothing suggests a beacon that will never be sent.
-        self.assertNotIn("neighbor_info.update_interval", f)
-        self.assertNotIn("neighbor_info.transmit_over_lora", f)
+        # Off means all three settings. A radio arriving with the airtime
+        # switch on under a disabled module is invisible otherwise: what
+        # provision never writes, inspect never compares (rule 9).
+        self.assertEqual(f["neighbor_info.update_interval"], "0")
+        self.assertEqual(f["neighbor_info.transmit_over_lora"], "false")
 
     def test_neighbor_info_on_air_writes_all_three_fields(self):
         data = field_registry()

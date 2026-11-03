@@ -139,16 +139,25 @@ def beacon_settings(reg: Registry) -> list[tuple[str, str]]:
     at that scale there is no cadence for an estimator to measure against.
     They are mesh-wide policy, so they come from the `radio:` block.
 
-    Both are written explicitly, including the OFF case. Left alone, a radio
-    reused from another mesh keeps that mesh's cadence, or keeps putting
-    neighbour beacons on air, and nothing here would say so (rule 9). Writing
-    0 would be worse than saying nothing: the firmware reads 0 as "use the
-    built-in default", so the file and the radio would disagree by design.
+    Every field is written on every run, the OFF case included, and the
+    inspector compares exactly this list — so a field left out here is a field
+    nothing ever looks at. Switching NeighborInfo off therefore means all three
+    of its settings and not just `enabled`: a radio reused from another mesh
+    arrives with that mesh's `update_interval` and, worse, with
+    `transmit_over_lora` on under a disabled module, harmless until the day
+    someone enables it and silent in the meantime (rule 9). With the module
+    off the firmware never reads `update_interval`, so the 0 written here is
+    a value that reads back as 0, not the "use the built-in default" it would
+    mean on a running module.
     """
     out = [("device.node_info_broadcast_secs", str(reg.radio.node_info_secs))]
     ni = reg.radio.neighbor_info
     if ni is None:
-        return out + [("neighbor_info.enabled", "false")]
+        return out + [
+            ("neighbor_info.enabled", "false"),
+            ("neighbor_info.update_interval", "0"),
+            ("neighbor_info.transmit_over_lora", "false"),
+        ]
     return out + [
         ("neighbor_info.enabled", "true"),
         ("neighbor_info.update_interval", str(ni.interval_secs)),

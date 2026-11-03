@@ -32,6 +32,7 @@ def healthy(**config):
         "lora.sx126x_rx_boosted_gain": True, "lora.override_frequency": 0.0,
         "bluetooth.enabled": True, "serial.enabled": False,
         "device.node_info_broadcast_secs": 10800, "neighbor_info.enabled": False,
+        "neighbor_info.update_interval": 0, "neighbor_info.transmit_over_lora": False,
         "position.gps_mode": "ENABLED", "position.gps_update_interval": 3600,
         "position.position_broadcast_secs": 600,
         "position.position_broadcast_smart_enabled": False, "position.fixed_position": False,
@@ -161,6 +162,18 @@ class TestDrift(unittest.TestCase):
     def test_a_neighbour_beacon_left_on_by_another_mesh(self):
         """The silent divergence the read-back exists for: it was invisible before."""
         self.assertCaught(healthy(**{"neighbor_info.enabled": True}), "neighbor_info.enabled")
+
+    def test_the_airtime_switch_left_on_under_a_disabled_module(self):
+        """Harmless until someone enables the module, and silent until then.
+
+        The deployment declares no neighbour beacon, so all three settings are
+        written off; leaving the two beyond `enabled` alone would mean reading
+        them back and never comparing them.
+        """
+        self.assertCaught(healthy(**{"neighbor_info.transmit_over_lora": True}),
+                          "transmit_over_lora")
+        self.assertCaught(healthy(**{"neighbor_info.update_interval": 14400}),
+                          "update_interval")
 
     def test_beacon_cadence_drift(self):
         self.assertCaught(healthy(**{"device.node_info_broadcast_secs": 3600}),
