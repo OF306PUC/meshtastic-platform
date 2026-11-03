@@ -184,11 +184,11 @@ nodes:
   - ref: N3
     function: node
     status: planned
-    node_id: null
-    mac: null
+    node_id: "!32f30d4e"
+    mac: "F8:3A:32:FE:0D:4E"
     hardware: sensecap_solar_node_p1_pro
     mcu: nrf52840
-    firmware: null
+    firmware: "2.7.26"
     role: CLIENT
     hop_limit: 3
     antenna:

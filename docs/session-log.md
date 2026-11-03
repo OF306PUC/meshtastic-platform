@@ -20,6 +20,68 @@ Entry format:
 
 ---
 
+## 2026-11-02 — La guía SASIPA en tres partes, y su lista de trabajo
+
+**Time:** 17:00 (aprox)
+**User request:** (1) la guía de despliegue debería ser más corta y en este
+orden: asignación de nodos con posiciones y justificación por LoS, el grafo
+Meshtastic con los nodos y sus canales más la guía de configuración con los
+comandos, y la teoría detrás de la implementación sujeta al despliegue; (2)
+después: una lista de tareas para la guía que contenga el análisis de canal
+(LoS, márgenes con FSPL y el hardware de cada nodo), la influencia de la
+topología en estrella sobre retransmisión/ACK/ruteo directo, el punto de
+operación con airtime por cadencia (NodeInfo 2 h, NeighborInfo 4 h, telemetría
+2 min, mensajería como Poisson λ = 2 min), qué puede estimar y mostrar
+efectivamente el gateway, una sección de interacción de las personas con la
+malla, y lo que falte.
+
+### Actions taken
+- Reestructurada `docs/sasipa-despliegue/` en tres `\part`: «Dónde va cada
+  nodo» (`1-asignacion.tex`), «La malla y su configuración» (`2-malla.tex`,
+  `3-configuracion.tex`) y «Por qué funciona» (`4-teoria.tex`), más anexos
+  A/B/D. Los doce capítulos anteriores quedaron en `secciones/v1/`.
+- Refrescados datos vencidos de la guía: `hop_limit: 3`, D1/D2 como nodos de
+  acceso (eran R1/R2 receptores), Bluetooth ahora escrito por la plataforma,
+  `tx_power_policy: declared` con el recorte a 22 dBm, fibra en N2/N5/N6.
+- `preambulo.tex`: `\renewcommand{\partname}{Parte}` (salía «Part I»).
+- Escrita `docs/sasipa-despliegue/TODO.md`: catorce tareas (T1–T14) con destino,
+  estado y criterio de cierre.
+- Calculados los tiempos en el aire por flujo con
+  `radio/presets.time_on_air_ms` en MEDIUM_FAST: `device` 170,5 ms,
+  `environment` 150,0, `position` 160,3, NodeInfo 221,7, NeighborInfo 272,9,
+  texto 201,2.
+
+### Decisions
+- La lista de trabajo va en la carpeta de la guía (`TODO.md`, en español como
+  su README), no en la bitácora: es un artefacto vivo de la guía, no un
+  registro de sesión.
+- Fuera el capítulo de mantención: duplicaba `docs/troubleshooting.md`. Queda
+  como tarea T11 media página de puente con los síntomas de terreno.
+- La carga ofrecida se documenta con **dos** números, no uno: el tráfico
+  retransmitido depende de cuántos nodos se oyen entre sí, y eso hoy no se
+  sabe. Estrella pura ×1 ≈ 1,5 %; malla completa ×6 ≈ 9,2 %.
+
+### Outcomes
+- `make` construye `guia-sasipa.pdf`: 16 páginas (eran 25), sin referencias
+  indefinidas, 2 avisos de caja.
+- Detectada una inconsistencia numérica real (T5): §4.3 de la guía dice 1,6 %
+  originado y ~5 % con retransmisiones, mientras el comentario de
+  `deployments/rapa-nui.yaml` estima 8,95 % solo para la telemetría de 120 s.
+  Los dos se calcularon a mano y con supuestos de retransmisión distintos.
+- Detectada una asimetría que el presupuesto de enlace actual esconde (T2): el
+  gateway es SX1276, sin los 2 dB de `rx_boosted_gain`, y transmite a 20 dBm
+  con antena de goma; el sentido GW→nodo es el peor y no está tabulado.
+
+### Next steps / open questions
+- T4 y T5 primero: son el esqueleto analítico del que cuelgan T2, T6 y la mitad
+  de T7.
+- Seis huecos de figura esperando archivos del equipo; los tres que bloquean
+  análisis son `perfiles-enlace.pdf`, `grafo-meshtastic.pdf` y
+  `nodos-canales.pdf`.
+- ¿Se borran los doce capítulos de `secciones/v1/` o se dejan? Hoy se dejan.
+- La carpeta de la guía está en `.gitignore`: nada de esto llega al repositorio,
+  y el único respaldo es local.
+
 ## 2026-11-02 — Beacons declarados: NodeInfo y NeighborInfo en el bloque `radio:`
 
 **Time:** (aprox)
