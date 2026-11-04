@@ -232,10 +232,27 @@ class TestNodePlan(unittest.TestCase):
         self.assertFalse([k for k in f if k.startswith(("serial.", "bluetooth."))])
 
     def test_other_radios_turn_the_serial_module_off_and_bluetooth_on(self):
-        for ref in ("N1", "GW", "R1"):
+        for ref in ("N1", "R1"):
             f = flags(self.plan_for(ref))
             self.assertEqual(f["serial.enabled"], "false", ref)
             self.assertEqual(f["bluetooth.enabled"], "true", ref)
+
+    def test_a_gateway_radio_has_bluetooth_written_off(self):
+        """Its host drives it over USB: BLE is surface with nothing behind it."""
+        f = flags(self.plan_for("GW"))
+        self.assertEqual(f["serial.enabled"], "false")
+        self.assertEqual(f["bluetooth.enabled"], "false")
+        # No PIN on a radio that does not advertise — and no mode either.
+        self.assertNotIn("bluetooth.mode", f)
+        self.assertNotIn("bluetooth.fixed_pin", f)
+
+    def test_a_declared_pin_does_not_leak_into_a_gateways_plan(self):
+        """The redaction must follow the field, not the last argument."""
+        bt = [s for s in plan.node_steps(self.reg, self.reg.by_ref("GW"), None, PSKS, "481902")
+              if s.label == "bluetooth"][0]
+        self.assertNotIn("481902", bt.argv)
+        self.assertEqual(bt.display(), " ".join(bt.argv))   # nothing to redact
+        self.assertNotIn(plan.REDACTED, bt.display())
 
     def test_cadence_scale_reaches_the_radio(self):
         data = bench(field_registry())

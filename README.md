@@ -157,14 +157,14 @@ The decision, the PBX connection in detail and a worked example:
 | `lora.sx126x_rx_boosted_gain` | `radio.rx_boosted_gain` | Extra receive sensitivity, SX126x chips only |
 | `device.node_info_broadcast_secs` | `radio.node_info_secs` | How often a radio re-announces its identity (name, role, hardware, public key). Cannot be switched off; firmware floor one hour, default three. This is how a rebooted or replaced node gets a name in everyone else's node database instead of a bare `!0b64122b` |
 | `neighbor_info.*` | `radio.neighbor_info` | The adjacency beacon: up to ten neighbours with their SNR. Written OFF when the block is absent, so a radio reused from another mesh stops sending it. `transmit_over_lora` is the airtime decision — left false the beacon never reaches the channel. Firmware floor four hours |
-| `bluetooth.mode`, `bluetooth.fixed_pin` | `radio.ble_pin_env` | The BLE pairing PIN, read from the named `.env` variable and compared by `inspect` without ever being printed. Omit the key and pairing stays as the firmware left it — which on a board with no screen is `FIXED_PIN` at a default Meshtastic publishes, so anyone within BLE range can pair and reconfigure the node |
+| `bluetooth.mode`, `bluetooth.fixed_pin` | `radio.ble_pin_env` | The BLE pairing PIN, read from the named `.env` variable and compared by `inspect` without ever being printed. Omit the key and pairing stays as the firmware left it — which on a board with no screen is `FIXED_PIN` at a default Meshtastic publishes, so anyone within BLE range can pair and reconfigure the node. Not written on a radio whose BLE is off |
 | `device.role` | node `role` | `CLIENT`: reports and relays. `CLIENT_MUTE`: never relays others' packets (gateway, receiver) |
 | `lora.hop_limit` | node `hop_limit` | How many times a packet it sends may be relayed |
 | `lora.tx_power` | derived, or node `tx_power_dbm` under `radio.tx_power_policy: declared` | See above |
 | `telemetry.*` | node `intervals`, `sensors` | Device telemetry (battery, voltage, channel use, airtime) and environment telemetry (only with a sensor), each at its cadence |
 | `position.*` | node `intervals.position` | GPS on and the position broadcast at that cadence, or GPS off with no flow declared. Always written off: smart (movement-triggered) broadcast, and `fixed_position`, which makes a radio report stored coordinates instead of its fix. The local fix interval follows mobility — 30 s on a receiver, one hour on anything bolted to a post — and costs no airtime |
 | `serial.enabled` | node `function` | Off on every radio except `pbx` ones, whose serial link and Bluetooth are never touched here |
-| `bluetooth.enabled` | node `function` | On, so a phone or a laptop can reach the radio over BLE — written, not assumed, because a radio reused from a PBX arrives with it off. Never touched on a `pbx` radio |
+| `bluetooth.enabled` | node `function` | On, so a phone or a laptop can reach the radio over BLE — written, not assumed, because a radio reused from a PBX arrives with it off. Written **off** on a `gateway`, whose host drives it over USB and which no person pairs with. Never touched on a `pbx` radio |
 
 A position is never written to a radio: the surveyed site is a record in the
 file, compared later with what the GPS reports.

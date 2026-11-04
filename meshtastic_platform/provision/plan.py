@@ -195,12 +195,14 @@ def serial_settings(node: Node) -> list[tuple[str, str]]:
 
 
 def bluetooth_settings(node: Node, pin: str | None = None) -> list[tuple[str, str]]:
-    """Bluetooth: on, except on a pbx radio, where it is not touched.
+    """Bluetooth: on where a person reaches the radio, off on a gateway.
 
     BLE is how a phone or a laptop reaches a radio, so it is written on rather
     than assumed: a radio reused from a PBX arrives with Bluetooth off, because
     there the nRF52840 serves the BLE side instead. On a pbx radio it stays the
-    PBX project's to configure, like the serial module above.
+    PBX project's to configure, like the serial module above. A gateway radio
+    has no such person: it is written OFF, explicitly, so one reused from the
+    field stops advertising instead of quietly keeping it on.
 
     `pin` is the pairing PIN read from .env when the deployment declares
     `radio.ble_pin_env`. Without it the mode is NOT written, and the radio keeps
@@ -210,6 +212,11 @@ def bluetooth_settings(node: Node, pin: str | None = None) -> list[tuple[str, st
     """
     if node.function == "pbx":
         return []
+    if node.function == "gateway":
+        # A gateway radio is driven by its host over USB and lives inside a
+        # building that is not the mesh's. BLE there is reachable surface with
+        # nothing behind it, so it is written OFF rather than given a PIN.
+        return [("bluetooth.enabled", "false")]
     out = [("bluetooth.enabled", "true")]
     if pin is not None:
         out += [("bluetooth.mode", "FIXED_PIN"), ("bluetooth.fixed_pin", pin)]
@@ -222,8 +229,11 @@ def bluetooth_step(cmd: list[str], node: Node, pin: str | None) -> list[Step]:
     if not bt:
         return []
     argv = _sets(cmd, bt)
-    # `bluetooth.fixed_pin` is written last, so its value is the final argument.
-    return [Step("bluetooth", argv, frozenset({len(argv) - 1} if pin is not None else set()))]
+    # The value right after the key, found rather than assumed: a radio that
+    # takes no PIN still has a last argument, and redacting that one would
+    # hide a plain setting while printing nothing secret.
+    secret = {i for i in range(1, len(argv)) if argv[i - 1] == "bluetooth.fixed_pin"}
+    return [Step("bluetooth", argv, frozenset(secret))]
 
 
 def _sets(cmd: list[str], settings: list[tuple[str, str]]) -> list[str]:
