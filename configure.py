@@ -149,6 +149,18 @@ def cmd_provision(args) -> int:
             return 2
         psks = {ch.index: "<unset>" for ch in reg.radio.channels}
 
+    # The BLE pairing PIN, when the deployment declares where it lives. A dry
+    # run prints the plan without it rather than refusing: the plan is readable
+    # without the secret, and the PIN is redacted in it either way.
+    try:
+        ble_pin = radio_profile.ble_pin(reg.radio)
+    except RuntimeError as exc:
+        if not args.dry_run:
+            print(f"ERROR: {exc}")
+            return 2
+        print(f"  note: {exc}")
+        ble_pin = None
+
     print(f"{reg.name}: provisioning {node.ref} ({node.function}, {node.role})")
     print(f"  {reg.radio.describe()}")
     print(f"  tx_power {reg.expected_tx_power(node)} dBm ({reg.radio.tx_power_policy}), "
@@ -181,7 +193,7 @@ def cmd_provision(args) -> int:
                 print(f"  ! {p}")
             return 1
 
-    steps = plan.node_steps(reg, node, args.port, psks)
+    steps = plan.node_steps(reg, node, args.port, psks, ble_pin)
     if args.dry_run:
         print("\nDry run — nothing written. Plan:")
         for s in steps:

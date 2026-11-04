@@ -43,6 +43,11 @@ radio:
   # neighbor_info:
   #   interval_secs: 14400
   #   transmit_over_lora: false
+  # The .env variable holding the BLE pairing PIN: the NAME of the variable,
+  # never the number (rule 8). Omit the key to leave BLE pairing as the
+  # firmware set it — but on a board with no screen that is FIXED_PIN at a
+  # default anyone can look up, so a field deployment should declare one.
+  # ble_pin_env: MY_MESH_BLE_PIN
   # Radiated-power caps (EIRP) that apply where the mesh operates. The most
   # permissive band containing the whole channel applies. [] if none apply.
   eirp_caps:

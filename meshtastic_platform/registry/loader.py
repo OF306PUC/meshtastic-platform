@@ -293,7 +293,7 @@ _META_KEYS = {"deployment", "kind", "description", "firmware_target", "cadence_s
 _META_REQUIRED = {"deployment", "kind"}
 _RADIO_KEYS = {"region", "modem_preset", "channel_num", "channels", "rebroadcast_mode",
                "position_precision", "rx_boosted_gain", "eirp_caps", "tx_power_policy",
-               "node_info_secs", "neighbor_info"}
+               "node_info_secs", "neighbor_info", "ble_pin_env"}
 _RADIO_REQUIRED = {"region", "modem_preset", "channels", "rebroadcast_mode",
                    "position_precision", "rx_boosted_gain", "node_info_secs"}
 _NEIGHBOR_INFO_KEYS = {"interval_secs", "transmit_over_lora"}
@@ -389,6 +389,9 @@ def _radio(r: _Reader, raw) -> RadioSpec | None:
         eirp_caps=tuple(caps) if caps is not None else None,
         tx_power_policy=policy,
         neighbor_info=_neighbor_info(r, d),
+        # The NAME of the .env variable, never the PIN: a PIN in a deployment
+        # file is a secret in git (rule 8). Absent = BLE pairing is not written.
+        ble_pin_env=r.get(d, "ble_pin_env", "radio", str) if "ble_pin_env" in d else None,
     )
 
 

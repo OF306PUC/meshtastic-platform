@@ -10,6 +10,9 @@ later.
 | R   | the `radio:` block resolves: region, preset, slot, channels    |
 | R2  | beacon cadences within the firmware's limits, and a neighbour  |
 |     | beacon put on air is reported on every run                     |
+| R3  | a field deployment names the .env variable holding its BLE     |
+|     | pairing PIN; undeclared, every radio keeps the firmware's      |
+|     | published default and nothing checks it                        |
 | V1  | node_id unique and shaped '!' + 8 hex; refs/labels unique      |
 | V2  | tx_power within the chip's valid settings and the declared     |
 |     | EIRP cap, and equal to what the deployment's policy derives    |
@@ -136,6 +139,20 @@ def validate(reg: Registry) -> list[Finding]:
             c.warn("R2", "radio", "neighbor_info.transmit_over_lora is on: adjacency "
                                   "beacons go ON AIR, and a receiver counts portnum 71 "
                                   "among the unattributed portnums (no declared flow)")
+    # B1: BLE pairing. The PIN itself is never read here — validation must run
+    # without .env — only whether the deployment says where it lives.
+    if spec.ble_pin_env is None:
+        if m.kind == "field":
+            c.warn("R3", "radio", "no ble_pin_env: every radio keeps the PIN the firmware "
+                                  "chose on first boot, which on a screenless board is the "
+                                  "published default, and inspect cannot see it")
+    elif not spec.ble_pin_env.strip():
+        c.error("R3", "radio", "ble_pin_env is empty: name the .env variable holding the "
+                               "PIN, or omit the key to leave BLE pairing untouched")
+    elif spec.ble_pin_env.strip().isdigit():
+        c.error("R3", "radio", f"ble_pin_env is {spec.ble_pin_env!r}, which is a PIN and not "
+                               f"a variable name: the PIN lives in .env, never in a file "
+                               f"that is committed (rule 8)")
     if m.kind == "field" and spec.eirp_caps is None:
         c.error("V2", "radio", "eirp_caps must be declared for a field deployment "
                                "(the radiated-power caps where it operates; [] if none apply)")

@@ -66,6 +66,13 @@ MIN_NEIGHBOR_INFO_SECS = 4 * 60 * 60    # min_neighbor_info_broadcast_secs
 # many seconds is therefore the same interval: ~24.86 days, not "never".
 MAX_INTERVAL_SECS = 2147483647 // 1000
 
+# BLE pairing. The firmware picks the mode on first boot from whether it found a
+# screen: with one it is RANDOM_PIN, without one FIXED_PIN at `defaultBLEPin`
+# (NodeDB.cpp). That default is published in Meshtastic's own documentation, so
+# every screenless board out of the box pairs with a PIN the whole world knows.
+BLE_PIN_DIGITS = 6
+FIRMWARE_DEFAULT_BLE_PIN = "123456"
+
 
 @dataclass(frozen=True)
 class NeighborInfo:
@@ -106,6 +113,10 @@ class RadioSpec:
     # every deviation as a warning instead of refusing the file.
     tx_power_policy: str = "derived"
     neighbor_info: NeighborInfo | None = None   # None = the module is off
+    # Name of the .env variable holding the BLE pairing PIN, never the PIN
+    # itself (rule 8). None = this platform does not touch BLE pairing, and the
+    # radio keeps whatever the firmware chose on its first boot.
+    ble_pin_env: str | None = None
 
 
 @dataclass(frozen=True)
@@ -154,6 +165,10 @@ class RadioProfile:
     @property
     def neighbor_info(self) -> NeighborInfo | None:
         return self.spec.neighbor_info
+
+    @property
+    def ble_pin_env(self) -> str | None:
+        return self.spec.ble_pin_env
 
     @property
     def position_broadcast_smart_enabled(self) -> bool:
@@ -223,6 +238,26 @@ def channel_psks(profile: RadioProfile) -> dict[int, str]:
             f"print('base64:'+base64.b64encode(secrets.token_bytes(32)).decode())\". "
             f"An existing mesh's key is not generated: copy it from whoever provisioned it.")
     return values
+
+
+def ble_pin(profile: RadioProfile) -> str | None:
+    """The BLE pairing PIN from the environment, or None if none is declared.
+
+    Raises, naming the variable and never the value, when the deployment
+    declares one and the environment does not carry a usable six-digit number.
+    """
+    if profile.ble_pin_env is None:
+        return None
+    raw = (os.environ.get(profile.ble_pin_env) or "").strip()
+    if not raw:
+        raise RuntimeError(
+            f"BLE PIN not set: {profile.ble_pin_env}. Copy .env.example to .env and set it "
+            f"(six digits, the same on every radio of the mesh).")
+    if not (len(raw) == BLE_PIN_DIGITS and raw.isdigit()):
+        raise RuntimeError(
+            f"BLE PIN not valid: {profile.ble_pin_env} must be exactly {BLE_PIN_DIGITS} "
+            f"digits (the value is not shown).")
+    return raw
 
 
 def decode_psk(psk_b64: str) -> bytes:

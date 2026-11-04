@@ -169,6 +169,28 @@ class TestProfile(unittest.TestCase):
         with mock.patch.dict(os.environ, {"TEST_PSK_0": aes256, "TEST_PSK_1": aes256}):
             self.assertEqual(rp.channel_psks(p)[0], aes256)
 
+    def test_no_ble_pin_declared_reads_as_none(self):
+        """The platform then leaves pairing as the firmware set it."""
+        self.assertIsNone(rp.ble_pin(rp.build_profile(spec())))
+
+    def test_the_ble_pin_comes_from_the_variable_the_deployment_names(self):
+        p = rp.build_profile(spec(ble_pin_env="TEST_BLE_PIN"))
+        with mock.patch.dict(os.environ, {"TEST_BLE_PIN": " 481902 "}):
+            self.assertEqual(rp.ble_pin(p), "481902")       # surrounding spaces survive .env
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(RuntimeError) as ctx:
+                rp.ble_pin(p)
+        self.assertIn("TEST_BLE_PIN", str(ctx.exception))
+
+    def test_a_malformed_ble_pin_is_refused_without_echoing_it(self):
+        p = rp.build_profile(spec(ble_pin_env="TEST_BLE_PIN"))
+        for bad in ("12345", "1234567", "48190a", "CHANGE_ME"):
+            with mock.patch.dict(os.environ, {"TEST_BLE_PIN": bad}):
+                with self.assertRaises(RuntimeError) as ctx:
+                    rp.ble_pin(p)
+            self.assertIn("TEST_BLE_PIN", str(ctx.exception))
+            self.assertNotIn(bad, str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

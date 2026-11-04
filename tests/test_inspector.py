@@ -191,6 +191,40 @@ class TestDrift(unittest.TestCase):
         self.assertCaught(healthy(**dict(on, **{"neighbor_info.transmit_over_lora": False})),
                           "transmit_over_lora", reg)
 
+    def test_a_radio_left_on_the_firmware_ble_pin(self):
+        """The factory PIN of a screenless board is published: pairing is open."""
+        data = field_registry()
+        data["nodes"][0].update(node_id="!0b64122b", firmware="2.7.26")
+        data["radio"]["ble_pin_env"] = "TEST_BLE_PIN"
+        reg = parse(data)
+        snap = healthy(**{"bluetooth.mode": "FIXED_PIN",
+                          "bluetooth.fixed_pin": int(insp.radio_profile.FIRMWARE_DEFAULT_BLE_PIN)})
+        bad = [c for c in insp.check_local(snap, reg, reg.by_ref("N1"), ble_pin="481902")
+               if not c.ok]
+        self.assertTrue([c for c in bad if "BLE PIN" in c.label])
+
+    def test_the_ble_pin_is_compared_but_never_printed(self):
+        data = field_registry()
+        data["nodes"][0].update(node_id="!0b64122b", firmware="2.7.26")
+        data["radio"]["ble_pin_env"] = "TEST_BLE_PIN"
+        reg = parse(data)
+        snap = healthy(**{"bluetooth.mode": "FIXED_PIN", "bluetooth.fixed_pin": 481902})
+        checks = [c for c in insp.check_local(snap, reg, reg.by_ref("N1"), ble_pin="481902")
+                  if "BLE PIN" in c.label]
+        self.assertEqual([c.ok for c in checks], [True])
+        self.assertNotIn("481902", checks[0].line())
+        self.assertIn("matches .env", checks[0].line())
+
+    def test_pairing_mode_drift_is_caught(self):
+        data = field_registry()
+        data["nodes"][0].update(node_id="!0b64122b", firmware="2.7.26")
+        data["radio"]["ble_pin_env"] = "TEST_BLE_PIN"
+        reg = parse(data)
+        snap = healthy(**{"bluetooth.mode": "RANDOM_PIN", "bluetooth.fixed_pin": 481902})
+        bad = [c.label for c in insp.check_local(snap, reg, reg.by_ref("N1"), ble_pin="481902")
+               if not c.ok]
+        self.assertTrue([lbl for lbl in bad if "bluetooth.mode" in lbl])
+
     def test_a_serial_module_left_on(self):
         self.assertCaught(healthy(**{"serial.enabled": True}), "serial.enabled")
 

@@ -42,7 +42,7 @@ from meshtastic_platform.registry.model import Node, Registry
 # position_broadcast_smart_enabled = true. All three are written explicitly here.
 GPS_UPDATE_INTERVAL_S = {"node": 3600, "pbx": 3600, "receiver": 30, "gateway": 3600}
 
-REDACTED = "<psk>"
+REDACTED = "<secret>"   # a channel PSK or the BLE pairing PIN, never echoed
 
 
 def _b(value: bool) -> str:
@@ -194,15 +194,36 @@ def serial_settings(node: Node) -> list[tuple[str, str]]:
     return [] if node.function == "pbx" else [("serial.enabled", "false")]
 
 
-def bluetooth_settings(node: Node) -> list[tuple[str, str]]:
+def bluetooth_settings(node: Node, pin: str | None = None) -> list[tuple[str, str]]:
     """Bluetooth: on, except on a pbx radio, where it is not touched.
 
     BLE is how a phone or a laptop reaches a radio, so it is written on rather
     than assumed: a radio reused from a PBX arrives with Bluetooth off, because
     there the nRF52840 serves the BLE side instead. On a pbx radio it stays the
     PBX project's to configure, like the serial module above.
+
+    `pin` is the pairing PIN read from .env when the deployment declares
+    `radio.ble_pin_env`. Without it the mode is NOT written, and the radio keeps
+    whatever the firmware chose on first boot — on a board with no screen that
+    is FIXED_PIN at a default anyone can look up, which is why declaring one is
+    worth the trouble. The PIN is a secret: callers redact its argv position.
     """
-    return [] if node.function == "pbx" else [("bluetooth.enabled", "true")]
+    if node.function == "pbx":
+        return []
+    out = [("bluetooth.enabled", "true")]
+    if pin is not None:
+        out += [("bluetooth.mode", "FIXED_PIN"), ("bluetooth.fixed_pin", pin)]
+    return out
+
+
+def bluetooth_step(cmd: list[str], node: Node, pin: str | None) -> list[Step]:
+    """The bluetooth step, with the PIN's argv position marked as a secret."""
+    bt = bluetooth_settings(node, pin)
+    if not bt:
+        return []
+    argv = _sets(cmd, bt)
+    # `bluetooth.fixed_pin` is written last, so its value is the final argument.
+    return [Step("bluetooth", argv, frozenset({len(argv) - 1} if pin is not None else set()))]
 
 
 def _sets(cmd: list[str], settings: list[tuple[str, str]]) -> list[str]:
@@ -233,7 +254,7 @@ def channel_steps(reg: Registry, cmd: list[str], psks: dict[int, str]) -> list[S
 
 
 def node_steps(reg: Registry, node: Node, port: str | None,
-               psks: dict[int, str]) -> list[Step]:
+               psks: dict[int, str], ble_pin: str | None = None) -> list[Step]:
     """Provisioning plan for a node, a pbx radio, a gateway radio or a receiver."""
     cmd = base_cmd(port)
     p = reg.radio
@@ -249,6 +270,6 @@ def node_steps(reg: Registry, node: Node, port: str | None,
         Step("neighborinfo beacon", _sets(cmd, neighbor_info_settings(reg))),
         Step("GPS / position", _sets(cmd, position_settings(reg, node))),
         *([Step("serial", _sets(cmd, serial))] if (serial := serial_settings(node)) else []),
-        *([Step("bluetooth", _sets(cmd, bt))] if (bt := bluetooth_settings(node)) else []),
+        *bluetooth_step(cmd, node, ble_pin),
         Step("reboot", cmd + ["--reboot"]),
     ]

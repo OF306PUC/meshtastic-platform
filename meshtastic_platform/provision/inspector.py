@@ -47,7 +47,8 @@ LOCAL_FIELDS = [
     ("lora", "region", True), ("lora", "modem_preset", True), ("lora", "use_preset", False),
     ("lora", "channel_num", False), ("lora", "hop_limit", False), ("lora", "tx_power", False),
     ("lora", "sx126x_rx_boosted_gain", False), ("lora", "override_frequency", False),
-    ("bluetooth", "enabled", False),
+    ("bluetooth", "enabled", False), ("bluetooth", "mode", True),
+    ("bluetooth", "fixed_pin", False),
     ("position", "gps_mode", True), ("position", "gps_update_interval", False),
     ("position", "position_broadcast_secs", False),
     ("position", "position_broadcast_smart_enabled", False), ("position", "fixed_position", False),
@@ -253,7 +254,8 @@ def check_radio(s: Snapshot, reg: Registry, psks: dict[int, str] | None) -> list
     return [c for c in out if c is not None]
 
 
-def check_local(s: Snapshot, reg: Registry, node: Node | None, *, ref: str | None = None) -> list[Check]:
+def check_local(s: Snapshot, reg: Registry, node: Node | None, *, ref: str | None = None,
+                ble_pin: str | None = None) -> list[Check]:
     dev = s.identity
     if node is None:
         target = None
@@ -346,9 +348,21 @@ def check_local(s: Snapshot, reg: Registry, node: Node | None, *, ref: str | Non
                        "a serial module left on from an earlier configuration"))
 
     # Bluetooth on, except on a pbx radio: there the BLE side is the PBX's.
-    for key, want in bluetooth_settings(node):
-        out.append(_eq("registry", f"{r} {key}", want == "true", s.get(key),
-                       "no phone or laptop can reach this radio over BLE"))
+    # A declared PIN is compared and never printed, like a channel PSK — the
+    # whole point of keeping it in .env is that it does not reach a terminal.
+    for key, want in bluetooth_settings(node, ble_pin):
+        actual = s.get(key)
+        if key == "bluetooth.fixed_pin":
+            if actual != NA:
+                out.append(Check("registry", f"{r} BLE PIN", None, None, str(actual) == want,
+                                 "the radio pairs with a PIN this deployment does not know",
+                                 secret=True))
+        elif key == "bluetooth.mode":
+            out.append(_eq("registry", f"{r} {key}", want, actual,
+                           "pairing is left as the firmware chose it on first boot"))
+        else:
+            out.append(_eq("registry", f"{r} {key}", want == "true", actual,
+                           "no phone or laptop can reach this radio over BLE"))
 
     # Firmware (V5) and platform (V8).
     version = dev.firmware_version
@@ -516,17 +530,23 @@ def inspect(reg: Registry, port: str | None, *, ref: str | None = None,
     except RuntimeError as exc:
         print(f"WARNING: {exc} PSKs are not being checked.")
         psks = None
-    return report(snap, reg, psks, ref=ref, mesh=mesh)
+    try:
+        pin = radio_profile.ble_pin(reg.radio)
+    except RuntimeError as exc:
+        print(f"WARNING: {exc} The BLE PIN is not being checked.")
+        pin = None
+    return report(snap, reg, psks, ref=ref, mesh=mesh, ble_pin=pin)
 
 
-def report(snap: Snapshot, reg: Registry, psks, *, ref=None, mesh=True) -> int:
+def report(snap: Snapshot, reg: Registry, psks, *, ref=None, mesh=True,
+           ble_pin: str | None = None) -> int:
     print(f"Deployment: {reg.name} ({reg.path}) — {reg.radio.describe()}\n")
     node = reg.by_node_id(snap.identity.node_id) if snap.identity.node_id else None
     issues = print_local(snap, node, reg.radio.position_precision)
     print_config(snap)
     radio = check_radio(snap, reg, psks)
     print_checks("Radio (vs the deployment's radio block)", radio)
-    local = check_local(snap, reg, node, ref=ref)
+    local = check_local(snap, reg, node, ref=ref, ble_pin=ble_pin)
     print_checks("Registry (local node vs its entry)", local)
     print("  Note: lora.tx_power is what the radio was TOLD. The real figure is the\n"
           "  'Final Tx power: N dBm' line on its console at boot.\n")

@@ -172,6 +172,29 @@ class TestLoaderIsStrict(unittest.TestCase):
         self.assertEqual(codes(data), set())
         self.assertIn("R2", codes(data, level="warning"))
 
+    def test_a_field_deployment_without_a_ble_pin_is_warned_about(self):
+        """Undeclared, every radio keeps the firmware default and inspect is blind to it."""
+        data = field_registry()
+        self.assertIn("R3", codes(data, level="warning"))
+        self.assertNotIn("R3", codes(data))
+
+    def test_a_declared_ble_pin_variable_silences_the_warning(self):
+        data = field_registry()
+        data["radio"]["ble_pin_env"] = "MY_MESH_BLE_PIN"
+        self.assertNotIn("R3", codes(data, level="warning"))
+        self.assertEqual(parse(data).radio.ble_pin_env, "MY_MESH_BLE_PIN")
+
+    def test_a_pin_written_where_the_variable_name_goes_is_an_error(self):
+        """The number belongs in .env; a PIN here would be a secret in git (rule 8)."""
+        data = field_registry()
+        data["radio"]["ble_pin_env"] = "481902"
+        self.assertIn("R3", codes(data))
+
+    def test_an_empty_ble_pin_variable_is_an_error(self):
+        data = field_registry()
+        data["radio"]["ble_pin_env"] = "   "
+        self.assertIn("R3", codes(data))
+
     def test_unknown_flow_kind_is_rejected(self):
         data = field_registry()
         data["nodes"][0]["intervals"]["humidity"] = 60

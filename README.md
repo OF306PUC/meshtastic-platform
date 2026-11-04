@@ -85,6 +85,7 @@ radio:                              # identical on every radio of the mesh
   neighbor_info:                    # OMIT the block to leave the module off
     interval_secs: 14400
     transmit_over_lora: false       # true is the only setting that costs airtime
+  ble_pin_env: MY_MESH_BLE_PIN      # the VARIABLE NAME; the PIN lives in .env
   eirp_caps:                        # the power limits that apply where the mesh runs
     - {band_mhz: [915, 928], eirp_dbm: 27, label: "..."}
 nodes:
@@ -156,6 +157,7 @@ The decision, the PBX connection in detail and a worked example:
 | `lora.sx126x_rx_boosted_gain` | `radio.rx_boosted_gain` | Extra receive sensitivity, SX126x chips only |
 | `device.node_info_broadcast_secs` | `radio.node_info_secs` | How often a radio re-announces its identity (name, role, hardware, public key). Cannot be switched off; firmware floor one hour, default three. This is how a rebooted or replaced node gets a name in everyone else's node database instead of a bare `!0b64122b` |
 | `neighbor_info.*` | `radio.neighbor_info` | The adjacency beacon: up to ten neighbours with their SNR. Written OFF when the block is absent, so a radio reused from another mesh stops sending it. `transmit_over_lora` is the airtime decision — left false the beacon never reaches the channel. Firmware floor four hours |
+| `bluetooth.mode`, `bluetooth.fixed_pin` | `radio.ble_pin_env` | The BLE pairing PIN, read from the named `.env` variable and compared by `inspect` without ever being printed. Omit the key and pairing stays as the firmware left it — which on a board with no screen is `FIXED_PIN` at a default Meshtastic publishes, so anyone within BLE range can pair and reconfigure the node |
 | `device.role` | node `role` | `CLIENT`: reports and relays. `CLIENT_MUTE`: never relays others' packets (gateway, receiver) |
 | `lora.hop_limit` | node `hop_limit` | How many times a packet it sends may be relayed |
 | `lora.tx_power` | derived, or node `tx_power_dbm` under `radio.tx_power_policy: declared` | See above |

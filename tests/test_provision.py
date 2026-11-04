@@ -74,6 +74,36 @@ class TestNodePlan(unittest.TestCase):
         self.assertEqual(f["neighbor_info.update_interval"], "0")
         self.assertEqual(f["neighbor_info.transmit_over_lora"], "false")
 
+    def test_no_ble_pin_declared_leaves_pairing_alone(self):
+        """Without ble_pin_env the mode is not written: the firmware's choice stands."""
+        f = flags(self.plan_for("N1"))
+        self.assertEqual(f["bluetooth.enabled"], "true")
+        self.assertNotIn("bluetooth.mode", f)
+        self.assertNotIn("bluetooth.fixed_pin", f)
+
+    def test_a_declared_ble_pin_is_written_as_a_fixed_pin(self):
+        steps = plan.node_steps(self.reg, self.reg.by_ref("N1"), None, PSKS, "481902")
+        f = flags(steps)
+        self.assertEqual(f["bluetooth.mode"], "FIXED_PIN")
+        self.assertEqual(f["bluetooth.fixed_pin"], "481902")
+
+    def test_the_ble_pin_never_reaches_the_console(self):
+        """It is printed like a PSK: compared, never echoed (rule 8)."""
+        bt = [s for s in plan.node_steps(self.reg, self.reg.by_ref("N1"), None, PSKS, "481902")
+              if s.label == "bluetooth"][0]
+        self.assertIn("481902", bt.argv)          # it IS sent to the radio
+        self.assertNotIn("481902", bt.display())  # and never shown
+        self.assertIn(plan.REDACTED, bt.display())
+
+    def test_a_pbx_radio_gets_no_ble_pin(self):
+        """Its BLE side is the PBX project's, PIN included."""
+        data = field_registry()
+        data["nodes"].append(pbx_radio("P1"))
+        reg = parse(data)
+        self.assertEqual(plan.bluetooth_settings(reg.by_ref("P1"), "481902"), [])
+        f = flags(plan.node_steps(reg, reg.by_ref("P1"), None, PSKS, "481902"))
+        self.assertFalse([k for k in f if k.startswith("bluetooth.")])
+
     def test_neighbor_info_on_air_writes_all_three_fields(self):
         data = field_registry()
         data["radio"]["node_info_secs"] = 7200
