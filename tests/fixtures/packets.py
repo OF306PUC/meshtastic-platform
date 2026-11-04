@@ -40,6 +40,22 @@ def text_packet(payload: bytes, pkt_id=None):
     return pkt
 
 
+def neighborinfo_packet(neighbors=((0x0B64122B, 10.75), (0x32FE0D4E, -3.25)),
+                        interval=14400, last_sent_by=None, pkt_id=None):
+    """NEIGHBORINFO_APP as the library hands it over: camelCase, node nums."""
+    pkt = _envelope(pkt_id, -85, 7.5, 3, 5)
+    pkt["decoded"] = {
+        "portnum": "NEIGHBORINFO_APP",
+        "neighborinfo": {
+            "nodeId": 0x7C70DA02,
+            "lastSentById": last_sent_by if last_sent_by is not None else 0x7C70DA02,
+            "nodeBroadcastIntervalSecs": interval,
+            "neighbors": [{"nodeId": n, "snr": s} for n, s in neighbors],
+        },
+    }
+    return pkt
+
+
 def env_packet(temp=22.5, humidity=55.0, include_humidity=True, pkt_id=None):
     metrics = {"temperature": temp}
     if include_humidity:

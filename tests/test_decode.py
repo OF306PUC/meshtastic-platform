@@ -4,7 +4,7 @@ import time
 import unittest
 from unittest import mock
 
-from meshtastic_platform.decode import DecodeStats, decode
+from meshtastic_platform.decode import FLOW_KINDS, DecodeStats, decode
 from tests.fixtures import packets as pk
 
 
@@ -100,16 +100,51 @@ class TestApplicationPayloads(unittest.TestCase):
         self.assertIsNone(d.text.text)
 
 
+class TestNeighborInfo(unittest.TestCase):
+    """Portnum 71: the only packet that says who a node HEARS, not who sent it."""
+
+    def test_the_adjacency_list_is_parsed(self):
+        d = decode(pk.neighborinfo_packet())
+        self.assertEqual(d.kind, "neighborinfo")
+        ni = d.neighborinfo
+        self.assertEqual(ni.node_num, 0x7C70DA02)
+        self.assertEqual(ni.broadcast_interval_secs, 14400)
+        self.assertEqual([(n.node_num, n.snr) for n in ni.neighbors],
+                         [(0x0B64122B, 10.75), (0x32FE0D4E, -3.25)])
+
+    def test_it_is_not_a_measured_flow(self):
+        """At four hours there is no cadence for the gap estimator (rule 3)."""
+        d = decode(pk.neighborinfo_packet())
+        self.assertEqual(d.flows, ())
+        self.assertNotIn("neighborinfo", FLOW_KINDS)
+
+    def test_hearing_nobody_is_still_an_observation(self):
+        d = decode(pk.neighborinfo_packet(neighbors=()))
+        self.assertEqual(d.kind, "neighborinfo")
+        self.assertEqual(d.neighborinfo.neighbors, ())
+
+    def test_last_sent_by_is_the_relay_not_the_author(self):
+        """Each relay rewrites it, so the two differ on a packet that was relayed."""
+        d = decode(pk.neighborinfo_packet(last_sent_by=0x403192D7))
+        self.assertEqual(d.neighborinfo.node_num, 0x7C70DA02)
+        self.assertEqual(d.neighborinfo.last_sent_by_num, 0x403192D7)
+
+    def test_a_field_this_decoder_does_not_map_stays_visible(self):
+        pkt = pk.neighborinfo_packet()
+        pkt["decoded"]["neighborinfo"]["somethingNew"] = 7
+        self.assertEqual(decode(pkt).neighborinfo.extra, {"somethingNew": 7})
+
+
 class TestNothingDroppedSilently(unittest.TestCase):
     def test_unknown_portnum_lands_in_raw_and_is_counted(self):
         pkt = pk.env_packet()
-        pkt["decoded"]["portnum"] = "NEIGHBORINFO_APP"
+        pkt["decoded"]["portnum"] = "PAXCOUNTER_APP"
         d = decode(pkt)
         self.assertEqual(d.kind, "other")
         self.assertIs(d.raw, pkt)
         stats = DecodeStats()
         stats.record(d)
-        self.assertEqual(stats.unknown_portnum["NEIGHBORINFO_APP"], 1)
+        self.assertEqual(stats.unknown_portnum["PAXCOUNTER_APP"], 1)
 
     def test_unmapped_telemetry_variant_is_counted(self):
         pkt = pk.env_packet()

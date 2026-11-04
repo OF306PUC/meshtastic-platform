@@ -137,8 +137,8 @@ def validate(reg: Registry) -> list[Finding]:
                 radio_profile.MIN_NEIGHBOR_INFO_SECS)
         if spec.neighbor_info.transmit_over_lora and m.kind == "field":
             c.warn("R2", "radio", "neighbor_info.transmit_over_lora is on: adjacency "
-                                  "beacons go ON AIR, and a receiver counts portnum 71 "
-                                  "among the unattributed portnums (no declared flow)")
+                                  "beacons go ON AIR, counted by a receiver as the "
+                                  "'neighborinfo' kind and against no declared cadence")
     # B1: BLE pairing. The PIN itself is never read here — validation must run
     # without .env — only whether the deployment says where it lives.
     if spec.ble_pin_env is None:

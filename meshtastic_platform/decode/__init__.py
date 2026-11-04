@@ -89,6 +89,33 @@ class TextMessage:
 
 
 @dataclass(frozen=True)
+class Neighbor:
+    node_num: int | None
+    snr: float | None                  # as the REPORTING node heard this neighbour
+
+
+@dataclass(frozen=True)
+class NeighborInfo:
+    """One node's view of who it hears directly (NEIGHBORINFO_APP, portnum 71).
+
+    The adjacency the mesh cannot be asked for any other way: every other
+    packet says who sent it, this one says who a node HEARS. It is not a
+    FLOW_KIND — at four hours there is no cadence for the gap estimator to
+    measure against, which is why it is declared in the `radio:` block and not
+    in a node's `intervals`.
+
+    The firmware sends only node_id and snr per neighbour; everything else in
+    its table stays on the node. `last_sent_by_id` is rewritten by each relay,
+    so it is the node this copy came through, not the author.
+    """
+    node_num: int | None
+    last_sent_by_num: int | None
+    broadcast_interval_secs: int | None
+    neighbors: tuple[Neighbor, ...] = ()
+    extra: Mapping[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class DecodedPacket:
     # Envelope, common to every packet.
     from_id: str | None
@@ -113,6 +140,7 @@ class DecodedPacket:
     environment: EnvironmentMetrics | None = None
     position: Position | None = None
     text: TextMessage | None = None
+    neighborinfo: NeighborInfo | None = None
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False)
 
     @property
@@ -165,6 +193,19 @@ def _environment(telem: Mapping[str, Any]) -> EnvironmentMetrics | None:
         relative_humidity=em.get("relativeHumidity"),
         device_ts=telem.get("time"),
         extra=_extra(em, {"temperature", "relativeHumidity"}),
+    )
+
+
+def _neighborinfo(ni: Mapping[str, Any]) -> NeighborInfo:
+    # Emitted even when the neighbour list is empty: "I hear nobody" is an
+    # observation about the mesh, not a packet to discard.
+    raw = ni.get("neighbors") or []
+    return NeighborInfo(
+        node_num=ni.get("nodeId"),
+        last_sent_by_num=ni.get("lastSentById"),
+        broadcast_interval_secs=ni.get("nodeBroadcastIntervalSecs"),
+        neighbors=tuple(Neighbor(node_num=n.get("nodeId"), snr=n.get("snr")) for n in raw),
+        extra=_extra(ni, {"nodeId", "lastSentById", "nodeBroadcastIntervalSecs", "neighbors"}),
     )
 
 
@@ -269,6 +310,9 @@ def decode(packet: Mapping[str, Any] | None, *,
     elif portnum == "TEXT_MESSAGE_APP":
         parts["text"] = _text(decoded)
         kind = "text"
+    elif portnum == "NEIGHBORINFO_APP":
+        parts["neighborinfo"] = _neighborinfo(decoded.get("neighborinfo") or {})
+        kind = "neighborinfo"
     elif portnum == "PRIVATE_APP":
         kind = "private"               # an application's own format: opaque here
     else:
