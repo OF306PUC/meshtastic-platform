@@ -20,6 +20,475 @@ Entry format:
 
 ---
 
+## 2026-11-06 — Guía SASIPA: Fresnel/site-planner, manual por pasos, relay y revisión final
+**Time:** 15:40 (aprox)
+**User request:** completar §3.4 (Fresnel) con las capturas del Meshtastic Site
+Planner; reescribir el manual de despliegue como pasos (fases 0–3), con tablas
+de configuración por sección y del archivo YAML; podar ruido; anexo de rutas
+con propuesta de relay; revisión final del documento ("la biblia de la red").
+### Actions taken
+- §3.4 en `sec/2-node-pos.tex`: ecuaciones (r1, FSPL, presupuesto), diagrama
+  TikZ `figs/fresnel-zone.tex`, tabla de parámetros, recuadro 95/95, tabla de
+  resultados y figuras recortadas (`trim`) de `figs/site-planner/`.
+- Leído el código del site-planner (`src/engine/link.ts`, `params.ts`,
+  `engine/driver.cpp`): criterio 60 %, Fresnel sobre terreno sin clutter, y la
+  P_rx incluye +2.14 dB (PIRE tratada como ERP).
+- Manual (`sec/6-deploy-manual.tex`): fases 0–3 como pasos numerados;
+  `inspect` antes de `provision`; Tabla 26 (config por sección y fuente);
+  §7.10 + Tabla 30 (archivo de despliegue); eliminados avisos de firmware
+  mezclado, cinco cosas caras, PIN/puerto, §7.9 "Uso" y recuadro de conectores.
+- Anexo nuevo `sec/E-rutas.tex` y figura `figs/relay-los.pdf`, generada por
+  `meshpbx-testbench/sim/fig_relay_los.py` sobre el tile SRTM S28W110 (el mismo
+  que descarga el site-planner).
+- Revisión final: erratas, referencias rotas (`cap:inventario`), D1/D2 fuera de
+  la Tabla 4, coordenadas fijas contradiciendo la regla 6, ESP32 con BLE 4.2 y
+  puente CP2104/CH9102 en el diagrama del gateway.
+### Decisions
+- Relay propuesto: RE, Estanques Ara Piki (ESARA-1), −27.14940, −109.41572.
+  Con mástiles de 6 m despeja ≥ 89 % hacia N6, N2, N3 y N1 en ambos relieves.
+  Alternativas en laderas altas descartadas por no ser activos de SASIPA.
+- Cada enlace se evalúa con relieve de 30 m y de 90 m, quedándose con el peor:
+  con antenas bajas el despeje depende del pixel (GW–N1 a 2/4 m va de −14 % a
+  82 %).
+- No se ejecutó el motor ITM localmente (bloqueado por permisos); el anexo es
+  solo geométrico y lo declara.
+### Outcomes
+- Documento compila sin errores; con los anexos incluidos, 48 páginas y sin
+  referencias indefinidas.
+### Next steps / open questions
+- El usuario debe agregar `\input` de los anexos B, D-pbx y E-rutas en
+  `main.tex` (hoy `anx:pbx` queda indefinido en el PDF). El anexo A se archivó
+  en `sec/v1/` porque duplicaba la Tabla 30.
+- Decidido por el usuario: la estrella hacia el GW es la topología buscada (el
+  anexo D lo dice; los enlaces entre nodos son respaldo); el GW tendrá idealmente
+  conexión celular. Agregados: D1/D2 en la Tabla 9, suma explícita
+  L_c + L_Data + L_hdr dentro de ToA, y Tabla 28 de campos a llenar en terreno.
+- Faltan las capturas `figs/sp-gw-links` y `figs/sp-hops` del site-planner.
+- Altura real del GW y `connector_loss_db` siguen en nulo.
+- Herramienta nueva `meshpbx-testbench/sim/los_matrix.py`: LoS + despeje de
+  Fresnel + veredicto del site-planner para todos los pares a la vez (CSV,
+  tabla LaTeX `figs/los-matrix.tex` y `figs/los-profiles.pdf`), con `--mast`,
+  `--height REF=m` y `--candidate`. `fig_relay_los.py` la reutiliza. El tile
+  SRTM quedó en `.tmp/S28W110.hgt`. Anexo MeshPBX fuera por ahora (referencias
+  quitadas); invariantes sí va. Falta ubicar la captura del heatmap de RE.
+- Cierre: la guía se movió fuera del repo, a
+  `network-platforms/SASIPA_mesh_deploy/` (compila igual, 51 páginas);
+  `docs/sasipa-despliegue/figuras/` se eliminó (5 copias idénticas de archivos
+  ya en `figs/` y 3 figuras pgfplots de antenas sin uso). En
+  `docs/sasipa-despliegue/` queda solo `itinerario-terreno.md`. Los generadores
+  (`los_matrix.py`, `fig_relay_los.py`) deben apuntar `--outdir` a la nueva ruta.
+- `itinerario-terreno.md` también se movió a `SASIPA_mesh_deploy/`, y
+  `docs/sasipa-despliegue/` dejó de existir. Se borró de la guía todo archivo
+  que la compilación no lee (según `main.fls`: PNG con gemelo PDF, figuras TikZ
+  sin uso, capturas de meshtasticator, `sec/D-pbx.tex`, `sec/v1/`,
+  `figs/los-matrix.csv`) y los auxiliares de LaTeX; se conserva `main.pdf`.
+
+---
+
+## 2026-11-06 — LONG_FAST evaluado y descartado: se viaja en MEDIUM_FAST
+**Time:** 11:30 (aprox)
+**User request:** «creo que para la isla de pascua dejaré el preset de
+long-fast primero. qué debería hacer antes del despliegue. volver a probar toda
+la plataforma?» — y, tras ver los números, «No, dejemos medium fast».
+
+### Actions taken
+- Resueltas ambas ranuras con `regulatory.resolve_slot` y evaluado el tope de
+  EIRP con `regulatory.eirp_cap` contra los `eirp_caps` del archivo.
+- Barridas las 52 ranuras LONG_FAST de ANZ para ver cuáles conservan los 30 dBm.
+- Calculados ToA y ocupación de canal con `presets.preset_time_on_air_ms` para
+  ambos presets y para cadencias de 120/300/600/900 s.
+- Comparadas sensibilidades con `presets.sensitivity_dbm`.
+- Agregada la §9.1 al itinerario con la tabla comparativa y las tres
+  consecuencias.
+
+### Decisions
+- **Se viaja en MEDIUM_FAST, ranura 45 (926,125 MHz)** (usuario, 2026-11-06).
+  LONG_FAST queda documentado como contingencia *de terreno*, no de preparación.
+- No se tocó `rapa-nui.yaml`: sin cambio de preset no hay nada que cambiar, y
+  así no se mueve el SHA-256 que hay que mantener igual al del gateway.
+
+### Outcomes
+- **Hallazgo regulatorio:** LONG_FAST ranura 20 = 919,875 MHz queda 0,875 MHz
+  por encima del borde del tramo SUBTEL j.4 (913–919 MHz), así que pierde la
+  excepción de 30 dBm y cae al tope general de 27 dBm. Con el clamp real de
+  22 dBm del SX1262 más 5,8 dBi, los tres nodos de fibra (N2, N5, N6) radiarían
+  **27,8 dBm, por encima del tope**. En MEDIUM_FAST ranura 45 aplica j.4 con
+  30 dBm y los mismos 27,8 dBm son legales. Las ranuras LONG_FAST que conservan
+  30 dBm son la 1–16 y la 41–52.
+- **Hallazgo de aire:** ToA pasa de 160,3 ms a 559,1 ms (3,5×). Escalando el
+  8,95 % que el propio YAML documenta, la ocupación de canal con `device` a
+  120 s llegaría a ~31 %. NeighborInfo transmite solo si pasa
+  `airTime->isTxAllowedChannelUtil(true)` (umbral «polite»), así que a esa
+  ocupación **el grafo de adyacencia podría dejar de llenarse** — justo el dato
+  que la campaña va a buscar. El umbral exacto queda por confirmar en
+  `AirTime.cpp`.
+- LONG_FAST compra 5 dB (−126,5 → −131,5 dBm) contra márgenes ya de 38–56 dB, y
+  no recupera N1–N2, que está bloqueado por decenas de dB de difracción.
+- Respuesta a la pregunta de fondo: **no hace falta volver a probar la
+  plataforma.** El código es agnóstico al preset. Lo caro de un cambio de preset
+  son las nueve radios, y la migración tiene que ser atómica: radios en presets
+  o ranuras distintas no se oyen, y el síntoma es silencio, no degradación.
+
+### Next steps / open questions
+- **Sugerido, no aplicado:** agregar al comentario del plan de ranuras en
+  `rapa-nui.yaml` que cambiar de ranura cambia el tope de EIRP aplicable. El
+  archivo hoy avisa que hay que cambiar `channel_num` con el preset, pero no
+  que eso mueve el límite legal. Conviene batchearlo con la corrección del
+  comentario de N6 («centralising node»), para mover el SHA-256 una sola vez y
+  resincronizar con el gateway una sola vez.
+- Confirmar el umbral de `isTxAllowedChannelUtil(true)` en `AirTime.cpp` si
+  alguna vez se evalúa LONG_FAST en serio.
+
+---
+
+## 2026-11-06 — N6 en la central: el enlace a las oficinas como paso inicial
+**Time:** 09:00 (aprox)
+**User request:** el itinerario debe tener como paso inicial instalar N6 en
+SASIPA y verificar si hay enlace desde ese punto a las oficinas (dentro de
+SASIPA). Antes, en la misma sesión: explicación del uso de Fresnel asumiendo
+LoS / campo casi abierto / patrón de antena; elección de parámetros para el
+Meshtastic Site Planner; y revisión de los dos PNG de cobertura que el usuario
+dejó en `SASIPA_mesh_deploy/figs/`.
+
+### Actions taken
+- Calculada la distancia de quiebre de dos rayos (445 m con 6 m en ambos
+  extremos) y el exceso sobre espacio libre de cada enlace: de +0,9 dB en
+  N1–GW a +10,0 dB en N4–GW.
+- Calculado el presupuesto completo con patrón de antena: ángulos de elevación
+  reales (−0,25° a −1,92° hacia el GW), pérdida por patrón < 0,2 dB, y márgenes
+  de 38 a 56 dB.
+- Calculado el coeficiente de reflexión en incidencia rasante para cinco tipos
+  de suelo, y el abultamiento terrestre con N_s = 301 contra 370.
+- Revisados `sites-heatmap-meshtasticator.png` y
+  `sites-countour-meshtasticator.png` a resolución nativa.
+- Intento de identificar la rampa de color del overlay comparando los colores
+  dominantes contra ocho mapas de matplotlib. **No concluyente.**
+- Escrito `figs/colorbar-cobertura.tex` (TikZ, sin pgfplots) y verificado que
+  compila con el preámbulo existente.
+- Reestructurado `docs/sasipa-despliegue/itinerario-terreno.md`: nueva §3.1,
+  día 1 y día 2 reordenados, §0 y §7 actualizadas, y las tablas de §5 y §7
+  reetiquetadas.
+
+### Decisions
+- **N6 va en la central SASIPA, no en RE** (usuario, 2026-11-06). Revierte la
+  recomendación que el itinerario traía del 2026-11-04. Razones del usuario
+  implícitas en el pedido: cobertura dentro del recinto y de las oficinas.
+  **RE queda registrado como relé candidato**, con su dato intacto: es el único
+  sitio que llega despejado a N1, N2, N3, GW y RC con mástil de 6 m.
+- **El paso inicial del día 1 pasa a ser N6 + prueba del enlace a las
+  oficinas.** El argumento no es la cercanía sino que es la prueba de humo de
+  toda la cadena: con 58–85 dB de margen a través de una pared, un fallo ahí
+  no puede ser de radio, así que aísla configuración (preset, región, ranura,
+  PSK, aprovisionamiento, pila del gateway) el día 1 con el laptop sobre una
+  mesa. Criterio de corte explícito: si N6 no llega a las oficinas, no se sale
+  a instalar nada más.
+- Día 1 pasa a comprometer gateway + N6 + 2 nodos; día 2 baja a tres nodos y
+  gana colchón. N6 cuesta poco tiempo porque no hay traslado.
+- **No se inventó la barra de color.** La rampa no se puede deducir de una
+  captura alfa-compuesta (plasma 0,142 contra turbo 0,158: no es identificar,
+  es adivinar). Se entregó parametrizada, con los nueve topes en un bloque y el
+  aviso de confirmarlos en el planner. Una leyenda con la rampa equivocada
+  miente sobre los datos — regla 9.
+- Para el Site Planner se recomendaron: Maritime Subtropical, polarización
+  **vertical** (la fija el hardware), clutter 1 m corriendo también a 3 m,
+  ε_r 15, σ 0,005 S/m, bending 301 N-units (= k 4/3, consistente con el
+  análisis del repo).
+
+### Outcomes
+- **El único parámetro del Site Planner que mueve el resultado es clutter
+  height.** Demostrado: entre basalto seco y tierra húmeda hay 0,07 dB de
+  diferencia en la pérdida de dos rayos, y aun poniendo agua salada son 0,9 dB.
+  El bending 301 → 370 cambia el abultamiento 4,7 cm en el enlace más largo,
+  contra los 3,39 m de RMSE del propio SRTM.
+- **Todos los enlaces están más allá de la distancia de quiebre**, así que el
+  modelo correcto es dos rayos (n = 4), no espacio libre. Usar espacio libre
+  habría subestimado N4–GW en 10 dB.
+- La pérdida por patrón de antena es despreciable (< 0,2 dB) a los ángulos
+  reales; lo que sí importa es el aplomado, y solo en las tres de fibra:
+  10° de inclinación cuestan 1,56 dB en fibra contra 0,07 dB en goma.
+- Los dos PNG coinciden cualitativamente con el análisis de Fresnel (cobertura
+  concentrada en el eje Rano Kau–Mataveri–Hanga Roa, este y noreste oscuros):
+  dos modelos independientes de acuerdo.
+- Señalado que los PNG no sirven como evidencia por falta de leyenda,
+  marcadores de nodo y escala, y que más de la mitad del encuadre es océano —
+  física correcta pero engañosa en un informe.
+
+### Next steps / open questions
+- **Corregir en `rapa-nui.yaml` el comentario de N6** («centralising node:
+  relays the cluster to GW»): parado junto al gateway no ejerce esa función.
+  La etiqueta engaña y conviene arreglarla antes del viaje.
+- Definir con SASIPA el punto exacto de montaje de N6 dentro del recinto y su
+  distancia a las oficinas. Mantener ≥ 10 m entre su antena y la del gateway:
+  a 2,5 m la entrada ve −10 dBm y la linealidad se degrada antes del daño.
+- Renombrar las dos figuras: dicen `countour` (es *contour*) y `meshtasticator`
+  cuando la herramienta es el **Site Planner** — el Meshtasticator es el
+  simulador de eventos discretos, otra cosa.
+- Pedir al planner la exportación **PNG + world file (`.pgw`)** o GeoJSON, con
+  los parámetros de la corrida, para comparar punto a punto contra la tabla de
+  dos rayos.
+- Confirmar la rampa de color en el planner y fijarla en
+  `figs/colorbar-cobertura.tex`.
+- Sin cambios: sigue pendiente confirmar si los mástiles de 6 m están
+  instalados — es el supuesto del que depende todo el itinerario.
+
+---
+
+## 2026-11-04 — Rol de N6, modelo de Fresnel e itinerario de terreno
+**Time:** 16:00 (aprox)
+**User request:** tres cosas encadenadas — (1) si `CLIENT` sirve para N6 o
+conviene `REPEATER`/relay; (2) cómo funciona el radio de Fresnel en los modelos
+de línea de vista; (3) generar un itinerario para Rapa Nui con llegada 14:55 e
+intento de instalar 6 nodos más pruebas de canal con una LILYGO en 3 puntos
+distintos al de instalación.
+
+### Actions taken
+- Rol de N6: leídos `FloodingRouter.cpp` (`roleAllowsCancelingDupe`) y
+  `RadioInterface.cpp` (ventanas de contención) del firmware 2.7.26.
+- Fresnel: re-ejecutado el script del scratchpad a 6 m (altura de mástil que
+  declara `2-node-pos.tex`), con la caché SRTM existente — sin llamadas nuevas
+  a OpenTopoData.
+- Nuevos cálculos: radios de F₁ y bulge terrestre a la escala del despliegue;
+  waypoints navegables del punto crítico de cada perfil hacia el GW; barrido de
+  altura de la antena del GW (6/8/10/12 m); horas de sol y ocaso civil para la
+  central SASIPA en noviembre; matriz de distancias y rutas por día.
+- Escrito `docs/sasipa-despliegue/itinerario-terreno.md` (382 líneas, español).
+- Verificadas tres cifras del borrador que estaban mal y corregidas (abajo).
+
+### Decisions
+- **N6 se queda en `CLIENT`.** `REPEATER` está deprecado desde 2.7.11 y es
+  invisible en la lista de nodos, lo que rompe la atribución por nodo de la
+  campaña. `ROUTER` no agrega caminos, agrega retransmisiones redundantes. Un
+  `CLIENT` solo cancela su retransmisión cuando otro ya hizo el trabajo, que es
+  exactamente cuando sobra. Si alguna vez hace falta un relé, el candidato es
+  `ROUTER_LATE`, elegido con datos medidos.
+- Señalado que `CLIENT_BASE` —que la nota del plan §2.6 propone en
+  `rapa-nui.yaml:140`— actúa como router **solo para nodos favoritos**, y esta
+  plataforma no escribe ninguna lista de favoritos: hoy sería idéntico a
+  `CLIENT`.
+- El itinerario va en **español** por ser artefacto de terreno, como
+  `report/es/`. Queda en `docs/`, fuera del alcance del grep de CI, que solo
+  cubre `meshtastic_platform/ channel_study/ configure.py receiver.py`.
+- **El día 1 no da para 6 nodos.** 5 h 03 de luz tras el aterrizaje contra
+  6 h 12 de instalación (62 min por nodo, traslado incluido). El itinerario
+  compromete gateway + 2 nodos el día 1.
+- **Los "3 puntos por nodo" sí caben, a 10 min por punto.** El receptor oye a
+  todos los nodos a la vez, así que 18 sesiones dan hasta 108 muestras de
+  enlace. La tasa de entrega no sale de recorrer sino del registro continuo del
+  gateway; lo que se va a buscar al terreno es cobertura espacial de SNR.
+  Permanencias de 20–30 min se descartaron: 7,5 h de permanencia y duplican lo
+  que el gateway ya graba.
+- Los 3 puntos se definen por lo que responden, no por conveniencia:
+  P1 referencia local (valida el nodo), P2 sobre el punto crítico del perfil
+  (confirma o refuta el modelo), P3 en el vecino que el grafo diga (mide el
+  enlace real).
+
+### Outcomes
+- **Hallazgo principal:** cuatro de los seis puntos críticos del perfil están a
+  menos de 350 m de la central SASIPA. El cuello de botella no está repartido
+  por la isla, está en el gateway, que se sienta a 36 m con un lomo de 38–45 m
+  a doscientos y pico metros. **Subir la antena del GW de 6 a 8 m cruza
+  N2–GW sobre el umbral del 60 %** (0,43 → 0,61) y mejora todos los enlaces
+  largos a la vez. Es la acción de mayor rendimiento del viaje y cuesta un
+  tramo de mástil.
+- El reloj de 4 h del primer NeighborInfo gobierna el viaje: el grafo no se
+  puede evaluar el mismo día en que se instala el último nodo. De ahí que los
+  seis nodos deban quedar encendidos el día 2 y el día 3 sea solo medición.
+- Reconfirmado que **N1–N2 está bloqueado a cualquier altura razonable**
+  (−22,3 m a 6 m; −18,3 m a 10 m) y que **RE (ESARA-1)** es el único sitio
+  candidato que llega despejado a N1, N2, N3, GW y RC.
+- Documentada la colisión de nombres: en `sitios_sasipa.json` el sitio `GW` se
+  llama `Node6-Gateway-receiver`, mientras que `N6` en `rapa-nui.yaml` es otro
+  nodo. El "N6" de `2-node-pos.tex:85` es el GW del registro.
+- Validación cruzada del modelo: `2-node-pos.tex:85` reporta, vía HeyWhatsThat,
+  que N2–N6 apenas supera el 50 % de despeje; el cálculo SRTM independiente da
+  0,43 para ese mismo enlace. Dos métodos distintos señalan el mismo enlace
+  marginal.
+- 256 tests OK; `validate -d rapa-nui` muestra solo las advertencias esperadas
+  (`P` de relevamiento pendiente, `V2` del clamp a 22 dBm), que es justo lo que
+  el itinerario dice que se cierra en terreno.
+
+### Corrections made during the session
+- Borrador decía "1,7 km" en el tramo N1→N2 del día 1: son 2,6 km de camino.
+- Borrador decía "cinco de los seis puntos críticos" cerca de la central: son
+  **cuatro** (N4 queda a 3,5 km y N5 a 2,0 km del GW).
+- Borrador situaba el lomo "justo al este" del GW; de los cuatro waypoints
+  cercanos, tres están al este y el de N1 al oeste. Se quitó la dirección.
+
+### Next steps / open questions
+- **Confirmar con SASIPA si los mástiles de 6 m ya están instalados.** Es el
+  supuesto del que depende todo el itinerario: si hay que erigirlos, el viaje
+  necesita un día más.
+- Decidir formalmente el sitio de N6: el YAML le da hoy el punto de la central;
+  la recomendación del análisis es RE (ESARA-1).
+- Llevar un tramo de 2 m de mástil de extensión para el gateway.
+- Pendientes que el itinerario recoge como lista de corte previa al vuelo:
+  re-aprovisionar D2 (deriva `CLIENT` vs `CLIENT_MUTE`), fijar
+  `RAPA_NUI_BLE_PIN` en `.env`, definir cuál carcasa es N3, exportar las
+  imágenes del gateway construidas.
+- Sin resolver de antes: rotar las dos PSK de campus filtradas en `cebcf4f`;
+  corregir `v1/08-sitio.tex:40` ("N1, N2 y N6" contra el YAML) y
+  `10-mensajeria.tex:28` (afirmación del PIN aleatorio); portar la rama de
+  decodificación del portnum 71 al fork del gateway; identificar las dos radios
+  desconocidas en el canal.
+- `fresnel.py` y los dos scripts nuevos (`waypoints.py`, `gw_height.py`) siguen
+  en el scratchpad, sin promover al repo.
+
+---
+
+## 2026-11-04 — Tabla de roles en la guía SASIPA
+**Time:** (aprox, después de la entrada siguiente)
+**User request:** redactar "Los roles seleccionados para los distintos nodos…
+se resumen en la Tabla~\ref{tab:meshatstic-roles}" y una tabla breve y clara.
+
+### Actions taken
+- `docs/sasipa-despliegue/secciones/2-malla.tex`, §2.1, antes del recuadro
+  I5: la frase y la tabla `tab:meshtastic-roles` (rol, radios, retransmite
+  ✓/✗, saltos, por qué). Tres filas: CLIENT N1–N6 (3 saltos), CLIENT_MUTE GW
+  y D1/D2 (1 salto). `pifont` en el preámbulo para ✓/✗.
+- Datos leídos de `deployments/rapa-nui.yaml` (`role`, `hop_limit`,
+  `rebroadcast_mode: LOCAL_ONLY`).
+
+### Decisions
+- Etiqueta corregida a `tab:meshtastic-roles` (el pedido decía "meshatstic").
+- GW y D1/D2 en filas separadas: mismo rol, motivo distinto.
+
+### Outcomes
+- `make` compila; la tabla queda en la pág. 7, sin desbordes.
+
+---
+
+## 2026-11-04 — PIN de BLE en el manual, y el proyecto de Overleaf compilando
+
+**Time:** 09:00 (aprox)
+**User request:** agregar la configuración del PIN de BLE a lo generado para el
+manual de despliegue, y después compilar el proyecto LaTeX `SASIPA_mesh_deploy`
+que estaba como ZIP en `docs/sasipa-despliegue/`.
+
+### Actions taken
+- Verificado contra la documentación de Meshtastic el nombre y el dominio de los
+  campos: `bluetooth.mode` (`RANDOM_PIN`/`FIXED_PIN`/`NO_PIN`) y
+  `bluetooth.fixed_pin` (seis dígitos, fábrica `123456`). El modo con que arranca
+  una placa depende de si tiene pantalla.
+- Escritos seis parches sobre `sec/6-deploy-manual.tex`: el PIN en el bloque de
+  `.env` de la fase 0, un quinto punto en el aviso de claves, la fila 7 de
+  `tab:pasos`, el ítem de Bluetooth de la fase 2 más un aviso nuevo sobre
+  `RANDOM_PIN`/`NO_PIN`, la nota de `inspect` en la fase 3 y el emparejamiento y
+  la rotación en la sección de uso.
+- Extraído `SASIPA_mesh_deploy.zip` a `docs/sasipa-despliegue/SASIPA_mesh_deploy/`
+  y dejado compilando: 16 páginas, 0 errores.
+- Instalado `siunitx` (único paquete faltante) en `~/texmf` desde el `.deb` de
+  `texlive-science` 2023, sin root.
+- Arreglados cuatro errores de compilación y dos defectos silenciosos; ver abajo.
+- Armado `docs/sasipa-despliegue/SASIPA_mesh_deploy-actualizado.zip` para volver
+  a subir a Overleaf.
+
+### Decisions
+- **El PIN va en `.env`, no en el YAML.** Es un secreto en el mismo sentido que
+  una PSK: quien lo tiene puede reconfigurar la radio. Sigue el patrón de
+  `psk_env`, y el `Step` que lo escriba tiene que marcar esa posición en
+  `secret` o `provision --dry-run` lo imprime en pantalla.
+- **Se escribe `FIXED_PIN` en las nueve radios**, no solo en las sin pantalla.
+  `RANDOM_PIN` deja inalcanzable por BLE a un SenseCAP (no tiene dónde mostrar
+  el PIN) y es el modo de fábrica de las T-Beam: sin escribirlo la malla queda
+  con dos comportamientos según el modelo. `NO_PIN` se descartó: deja la radio
+  abierta a cualquier teléfono en alcance.
+- **Un solo PIN para toda la malla, por ahora.** Queda abierto si D1/D2 (radios
+  de acceso, cuyo PIN se le entrega a gente) deben llevar uno distinto del de
+  los nodos y el gateway; eso exigiría que `pin_env` se pueda declarar por nodo.
+- **El bloque de preámbulo que yo había entregado se eliminó entero** de
+  `preamble.tex`: el proyecto ya definía `aviso` (como `tcolorbox`), la columna
+  `L` y un `\lstset` con estilo propio. Mi copia los redefinía y además pisaba
+  el estilo `shell` del proyecto.
+
+### Outcomes
+- `SASIPA_mesh_deploy` compila: 16 páginas, 0 errores, 1 caja desbordada
+  (15 pt, en la tabla del resumen de `main.tex`), 4 referencias sin resolver.
+- Errores corregidos: `siunitx` ausente; `Option clash` de `hyperref` (cargado
+  dos veces, la segunda con opciones); `\aviso` y la columna `L` redefinidas;
+  `\includegraphics{figs/}%LoS-rapanui-diag.png}` — un `%` dentro del argumento.
+- Dos defectos silenciosos: `\figurasasipa` comprobaba `figuras/` pero incluía
+  `figs/`, así que el test fallaba siempre y salía la caja hueca en vez de la
+  figura; y `main.tex` no hacía `\input` de las secciones 4, 5 y 6 — el manual
+  estaba en el repositorio pero fuera del documento.
+
+### Addendum (10:00 aprox)
+- **Revertidos los tres `\input`** que había agregado a `main.tex`: el usuario
+  quiere decidir él qué secciones entran y edita sobre ese proyecto. El trabajo
+  queda contenido en `sec/` y `figs/`; `main.tex` vuelve a tener solo las cuatro
+  secciones originales (11 páginas, 0 errores).
+- **Creada `figs/stack-meshtastic.tex`**, la figura que `sec/3-mesh-config.tex:7`
+  referenciaba sin que existiera. Cinco capas OSI, y el color dice de dónde sale
+  cada ajuste: verde del archivo de deployment, gris lo que fija el firmware
+  (la MAC es la única capa sin ajustes en el registro), ámbar el enlace local
+  BLE/USB que no va por radio. No está `\input` en ninguna parte, a propósito.
+- Las capas se apilan con `below=of`, no con coordenadas: la primera versión se
+  encimaba con la onda del aire cuando una línea de claves pasaba a dos.
+- `\kg` choca con `siunitx`: las tres macros locales de la figura van
+  prefijadas (`\stkverde`, `\stkgris`, `\stkambar`).
+- Después el usuario pidió colocarla: la llamada a `\figuranuestra` quedó en
+  `sec/3-mesh-config.tex`, con un párrafo que explica el código de colores y
+  señala que la capa de enlace es la única sin ajustes en el registro. Con eso
+  `fig:stack-meshtastic` se resuelve y quedan 3 referencias abiertas, todas de
+  contenido del usuario. 11 páginas, 0 errores, 1 caja (la del resumen de
+  `main.tex`, preexistente).
+
+### Next steps / open questions
+- Las cuatro referencias rotas son huecos de contenido, no de compilación:
+  `\ref{sec}` y `\ref{cap}` en `sec/0-intro.tex:6` son marcadores sin destino,
+  `anx:pbx` apunta a `sec/D-pbx.tex` que el apéndice no incluye, y
+  `fig:stack-meshtastic` es una figura que todavía no existe.
+- Falta implementar el PIN en el código: `bluetooth_settings()` en
+  `provision/plan.py` y los tres campos en `LOCAL_FIELDS` del inspector. El
+  manual ya describe el estado al que apunta.
+- Las radios `pbx` quedan fuera, como ya ocurre con `serial` y `bluetooth`.
+
+
+## 2026-11-03 — Orden de la guía, ficha del nodo y curva de la antena de fibra
+
+**Time:** 14:30 (aprox)
+**User request:** (1) cómo ordenar la información de la guía; (2) arrancar con
+una introducción (borrador provisto); (3) arreglar la tabla de especificaciones
+del SenseCAP; (4) generar el gráfico de ganancia y eficiencia de la antena de
+fibra de vidrio, a partir de una tabla del fabricante (902--930 MHz).
+
+### Actions taken
+- Propuesta de orden en cuatro partes (hoy son tres): I sitios y LoS ·
+  II configuración · **III operación (gateway + personas)** · IV justificación.
+  La introducción absorbe `0-como-leer.tex`.
+- Revisada la tabla del SenseCAP: usaba el tipo de columna `Y`, que **no está
+  definido** en `preambulo.tex` (solo `L`), así que no compilaba.
+- Agregado `pgfplots` (compat 1.18) a `preambulo.tex`; no estaba, solo `tikz`.
+- Escrita `figuras/antena-fibra.tex`: doble eje (ganancia dBi / eficiencia %),
+  banda 902--928 sombreada y el punto de operación 926,125 MHz en ámbar.
+- Fila nueva en la tabla de figuras propias del README de la guía.
+
+### Decisions
+- La curva se dibuja con `pgfplots` y no a mano en TikZ: son 15 puntos con dos
+  escalas, y los ejes a mano son una fuente de error silenciosa.
+- La tabla del nodo deja de mencionar la antena de fibra como especificación
+  del equipo: la de fábrica es la de goma de 2 dBi (`model: SenseCAP stock`) y
+  la de fibra la aporta el proyecto. Ponerlas juntas hace creer que viene en la
+  caja.
+
+### Outcomes
+- `make` limpio: 16 páginas, 0 errores, 2 avisos de caja (los de siempre). La
+  tabla y la figura se probaron insertadas en el documento real y después se
+  revirtió la inserción: ubicarlas es del usuario.
+- La eficiencia media declarada por el fabricante (**71,73 %**) no coincide con
+  las quince filas entregadas, que promedian **76,66 %** (76,56 % si se excluye
+  la fila de 930 MHz, fuera de banda). Queda por aclarar con el proveedor.
+- La ganancia de 5,8 dBi del registro coincide exactamente con el valor de la
+  curva en 926 MHz, y **no** es el máximo (6,1 dBi en 918 MHz): la elección es
+  correcta y conservadora.
+
+### Next steps / open questions
+- ¿De dónde sale el 71,73 % del fabricante? Si es el promedio de una banda más
+  ancha, la ficha debería decirlo.
+- Falta ubicar la tabla del nodo (§2.2, antes de la tabla de las nueve radios)
+  y la figura de la antena.
+- `deployments/rapa-nui.yaml` sigue diciendo «a Raspberry Pi or Jetson»; el
+  usuario ya fijó Raspberry Pi 4 model B en la introducción.
+
 ## 2026-11-02 — La guía SASIPA en tres partes, y su lista de trabajo
 
 **Time:** 17:00 (aprox)
