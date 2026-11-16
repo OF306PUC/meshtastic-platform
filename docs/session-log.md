@@ -20,6 +20,173 @@ Entry format:
 
 ---
 
+## 2026-11-16 — Guía SASIPA: rutas con los nodos instalados
+**Time:** 11:15 (aprox)
+**User request:** ver las posiciones de los nodos ya instalados en Rapa Nui
+(Tabla `tab:sitios` de `sec/2-node-pos.tex`) y generar el análisis de rutas
+con ellas, sin RE, como PDF agregado al documento.
+
+### Actions taken
+- Posiciones instaladas = último fix GPS de cada nodo (`positions.csv` de la
+  carpeta de terreno; coincide con la tabla). Contra `planned`: N1–N3 a
+  16–22 m, N6/GW a 51 m, **N4 a 1.0 km al sur, N5 a 593 m**.
+- Copia temporal del registro (scratchpad) con esas posiciones en `surveyed`;
+  `deployments/rapa-nui.yaml` **no se tocó**.
+- `meshpbx-testbench/sim/fig_relay_los.py` (respaldado antes; sin git): lee
+  `surveyed` antes que `planned`, como `los_matrix.py`; un solo panel sin
+  `--candidate`; `--name` y `--title`. El uso anterior (con RE) no cambia.
+- Generados con mástiles de 6 m: `figs/rutas-instaladas.pdf`,
+  `figs/los-matrix-instalado.tex`, `figs/los-profiles-instalado.pdf` (nombres
+  nuevos: `relay-los.pdf` y `los-matrix.tex` quedan intactos).
+- `sec/E-rutas.tex`: nueva subsección "Rutas con los nodos instalados"
+  (`sec:rutas-instaladas`) al inicio del anexo: tabla, mapa, viñetas, perfiles
+  y recuadro `abierto` con los supuestos.
+
+### Decisions
+- Subsección dentro del anexo existente, no un archivo nuevo: no requiere
+  `\input` en `main.tex`. El análisis con sitios planificados y RE se conserva,
+  y el texto nuevo dice que el resto del anexo usa esos sitios.
+- Mástil de 6 m en todos los sitios (como el análisis anterior): no hay
+  alturas de antena registradas. Rx queda fuera (no está en el registro).
+
+### Outcomes
+- N1, N3, N5 llegan directo a N6/GW (143, 72, 107 %). **N4 perdió la línea de
+  vista al GW** (109 → −25 %): su único enlace despejado es N3 (139 %), ruta
+  N4→N3→GW sin alternativa. N5 perdió N3 (85 → −36 %). N2 sigue sin enlace
+  despejado (N4 30 %, N5 10 %).
+- Compilado de prueba (jobname aparte, salida en scratchpad): 53 páginas, sin
+  referencias indefinidas ni desbordes.
+
+### Next steps / open questions
+- Comparar con lo medido: la carpeta de terreno tiene la figura `_relay` (por
+  qué nodo llegó cada paquete), aunque con el receptor en Rx, no en el GW.
+- Las tablas y figuras del site-planner (`tab:sp-nodos`, `fig:sp-nodos`) y la
+  propuesta de RE siguen con N4 y N5 en sus sitios planificados.
+- `surveyed` en el registro: pendiente de que el usuario decida si se llena
+  con los fixes de los nodos (pierde la comparación relevado − reportado).
+
+### Más tarde (11:40–12:10 aprox)
+- Pregunta: ¿se usó la altura GPS? No: la cota es SRTM + mástil de 6 m. La
+  altura de los fixes (`data/N*_position.csv`, columna `altitude`) varía
+  20–30 m por nodo (desv. 5.5–10.4 m); el último fix de N4 (101 m) es su máximo,
+  la media 84 m. Media − SRTM entre −9 y +10 m: no sirve para medir el mástil.
+  Barrido de altura: N4–GW sin LoS a 6 m, 26 % a 10 m, 60 % a ~13 m; N5–GW
+  viable desde ~4 m; N2–GW sin LoS aunque el GW suba a 12 m.
+- El usuario acepta los 6 m y pide el texto del método + la matriz, en LaTeX,
+  para rehacer la sección B con las posiciones instaladas. El usuario ya había
+  quitado el mapa de su subsección.
+- `fig_relay_los.py`: en el panel único la leyenda va dentro del mapa
+  (esquina NE) y la figura es 3.6 × 5.6 in; antes dejaba una franja blanca y no
+  cabía en la página. `figs/rutas-instaladas.pdf` regenerado.
+- Bloque LaTeX entregado en el chat (copia en el scratchpad de la sesión), no
+  escrito en `E-rutas.tex`; compilado de prueba con copias de `main.tex` y
+  `E-rutas.tex`: 52 páginas.
+- **Corrección:** el conteo "sin avisos" estaba mal (`grep` sin `-a` trató el
+  log como binario). El `main.log` del usuario ya tenía `fig:los-profile` ×3
+  (figura que ya no existe), `fig:counter` y tres citas indefinidas; el bloque
+  no agrega ninguna.
+- Integración con la `sec:los` del usuario (`2-node-pos.tex`, ya con el mapa
+  como `fig:los-analysis`): el método va en `sec:los`; el anexo queda con matriz,
+  perfiles y detalle, sin repetir el mapa. Propuestos además: nota de que la
+  Tabla `tab:siteplanner` usa sitios planificados (N4, N5); `fig:los-profile` →
+  `tab:los-instalado` / `fig:los-analysis`; reescribir la frase de
+  `3-mesh-config` "los seis nodos de campo ven al Gateway" (ya no es cierta).
+  Compilado con copias de los tres archivos: queda 1 `fig:los-profile` (en la
+  B.3 vieja). Entregado en el chat; no se editó ningún archivo de la guía.
+- Decisión del usuario: **el anexo B (rutas) sale del documento**; todo el
+  análisis va en la Sección 3.4 `sec:los`. Ninguna otra sección cita etiquetas
+  ni figuras del anexo. Bloque único (método, mapa, matriz, viñetas, perfiles,
+  recuadro) compilado con `\input{sec/E-rutas}` quitado en una copia de
+  `main.tex`: 46 páginas, 3.4 en págs. 10–12, sin `fig:los-profile`; quedan
+  solo `fig:counter` y tres citas, previas. El usuario quita el `\input`.
+- ¿Hace falta el Site Planner? Recomendado mantenerlo rehaciendo GW–N4/N5 con
+  coordenadas instaladas (es lo único que estima si cierran por difracción),
+  o quitarlo antes que dejarlo contradiciendo al mapa. Usuario: comentarlo por
+  ahora. **Editado `sec/2-node-pos.tex`** (respaldo en el scratchpad): líneas
+  168–319, `\subsubsection*{Simulación con Meshtastic Site Planner}` hasta la
+  figura `fig:siteplanner-links`, con `% ` y una cabecera que dice por qué.
+  Compila (49 págs.); mientras `E-rutas` siga incluido, sus referencias a
+  `tab:siteplanner` y `tab:siteplanner-params` quedan indefinidas.
+- El usuario pegó su versión de `sec:los` (sin viñetas ni recuadro, perfiles
+  al anexo). **Editado `sec/2-node-pos.tex`:** rótulo de `tab:los-instalado` como
+  en su versión, y la frase final apunta al Anexo `anx:perfiles`. **Nuevo
+  `sec/E-perfiles.tex`:** anexo "Perfiles de terreno entre nodos" con
+  `fig:los-profiles-instalado`. Compilado con `\input{sec/E-perfiles}` en lugar
+  de `E-rutas` (copia de `main.tex`): 43 págs., sin etiquetas duplicadas; queda
+  `fig:los-profile` en `3-mesh-config.tex` l. 377. El usuario cambia el `\input`.
+- "Faltan gráficos": no faltaba ninguno (15 pares = todos entre 6 sitios, N6/GW
+  uno), pero a 8.6 in y 4 columnas, reducida al ancho de texto, no se leía.
+  `los_matrix.py` (respaldado): `--profile-cols` y `--profile-width`
+  (por omisión 4 y 8.6, como antes). Regenerada a 3 columnas y 6.5 in (el ancho
+  de texto, sin escalar): `figs/los-profiles-instalado.pdf`, página completa.
+  `E-perfiles.tex` dice que son los 15 pares. Rx no entra: no está en el
+  registro y su punto vale solo para la corrida del 11-11.
+- ¿Es cierto que "dado el `hop_limit`, la carga del canal es varias veces
+  mayor"? Revisado en el firmware clonado (`decentralized-LoRa/firmware`,
+  v2.7.23): cada radio repite un paquete a lo más una vez (historial de
+  paquetes), así que el tope es el número de radios que retransmiten (×6), no
+  el `hop_limit`; con la malla a ≤ 3 saltos, subirlo no cambia la carga. Un
+  `CLIENT` espera según el SNR y cancela si oye a otro repetir
+  (`FloodingRouter.cpp`, `roleAllowsCancelingDupe`); `ROUTER`, `ROUTER_LATE` y
+  `CLIENT_BASE` (favoritos) no cancelan. **Editado `sec/3-mesh-config.tex`**
+  (párrafo tras el mensaje de 32 caracteres, a pedido del usuario): peor caso ×6
+  con referencia a `eq:duty-lora-medium-fast`, el `hop_limit` solo fija el
+  alcance, "Sec." → "Sección". Compilado de prueba: 43 págs., sin referencias
+  indefinidas; quedan solo citas (`meshtastic-rebroadcast`,
+  `mesh:radio-settings` y vacías), ninguna de este cambio.
+- Estado de la plataforma, a pedido: 256 tests OK; `validate --all` pasa con
+  avisos esperados; copia del gateway con el mismo SHA-256; `main` local 4
+  commits delante de `origin/main` y `rapa-nui-testbed` 1 más, sin remota;
+  `project-overview.md` con fecha 2026-10-27 y 21 commits encima (rompía la
+  regla de las dos sesiones).
+- **Reescrito `docs/project-overview.md`** (a pedido): estado al 2026-11-16
+  (función `access`, BLE y PIN, beacons, portnum 71, `show --csv`, track GPS
+  del receptor, archivos de despliegue borrados el 30-10, diagramas de acceso
+  al canal); nueva sección "Field deployment: Rapa Nui" (MEDIUM_FAST, N6 junto
+  al GW y en `CLIENT`, posiciones instaladas, línea de vista, registro aún
+  `planned`); decisiones nuevas (política `declared`, una radio una identidad,
+  D1/D2 `access`, exportación sin retorno, beacons en `radio:`); restricciones
+  al día (copia del gateway en `deployments/sasipa/`, puntero del submódulo
+  atrasado, ediciones pendientes de `rapa-nui.yaml` en un solo cambio de SHA).
+  Verificado contra el código: escritura de NeighborInfo apagado
+  (`plan.py:161`) y exportación CSV (`export.py:128`).
+- **Usuario: el despliegue oficial de rapa-nui es el del gateway**
+  (`meshtastic-gateway/deployments/sasipa/rapa-nui.yaml`). Ese archivo cambió
+  hoy a las 15:19 (`1217c55`, hecho desde otro equipo): `ble_pin_env:
+  RAPA_NUI_BLE_PIN`, N1 `hop_limit 2`, D1 y D2 `hop_limit 1`, y un receptor
+  `Rx` (LILYGO `!bb8106c4`). La plataforma no tenía esa versión en ningún
+  commit; su SHA había dejado de coincidir.
+- **Copiado byte a byte** el oficial a `deployments/rapa-nui.yaml` (SHA
+  `6935a193…` en ambos; la versión anterior, `32bb4d3`, respaldada en el
+  scratchpad). `.env.example`: `EASTERNET_BLE_PIN` → `RAPA_NUI_BLE_PIN`, el
+  nombre que ya usaba el `.env` local. 256 tests OK; `validate -d rapa-nui`:
+  10 nodos, solo avisos esperados.
+- Overview corregido: el archivo oficial es el del gateway y los cambios van
+  del gateway a la plataforma; rapa-nui con diez radios. Agregada la regla del
+  usuario (sesión del gateway de hoy): la posición válida es el GPS medido en
+  terreno, que es el que transmiten los nodos.
+- **Corrección:** `main` no está 4 commits delante del remoto. `origin/main`
+  local estaba desactualizado; `ls-remote` muestra `38861b9`, el mismo `main`.
+  Sin subir queda solo `rapa-nui-testbed` (`32bb4d3`).
+- Con el visto bueno del usuario:
+  - **`CLAUDE.md`, regla 2:** el archivo oficial de rapa-nui es el del gateway;
+    se cambia ahí y se copia acá byte a byte, nunca al revés.
+  - **Guía SASIPA**, alineada con el archivo oficial:
+    - `3-mesh-config.tex` l. 482: N2–N6 con 3 saltos, N1 con 2, D1/D2 con 1.
+    - l. 519, 547 y 706: "el `hop_limit`", sin el 3 fijo.
+    - `5-user-interaction.tex`: D1/D2 con `hop_limit: 1`; el mensaje lo repite
+      una vez cada nodo de campo que lo oiga y llega al gateway solo si este
+      oye a D1 o a uno de esos nodos.
+    - `6-deploy-manual.tex`: `RAPA_NUI_BLE_PIN` en el bloque de `.env` y en la
+      tabla; fila `hop_limit` = "3; 2 en N1; 1 en GW, D1 y D2".
+  - Compilado de prueba: 45 págs., sin referencias indefinidas. Un `Overfull`
+    de 15 pt en las líneas 52–53 de `main.tex`, anterior a las secciones: no es
+    de estos cambios.
+  - La guía no menciona la radio `Rx` en sus tablas de roles ni de
+    `hop_limit`.
+
+---
+
 ## 2026-11-06 — Guía SASIPA: Fresnel/site-planner, manual por pasos, relay y revisión final
 **Time:** 15:40 (aprox)
 **User request:** completar §3.4 (Fresnel) con las capturas del Meshtastic Site
