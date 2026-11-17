@@ -20,6 +20,62 @@ Entry format:
 
 ---
 
+## 2026-11-17 — README.es.md para el equipo de TI de SASIPA
+**Time:** 10:00 (aprox)
+**User request:** «Necesito que escribas un README.es.md. El público objetivo son
+los técnicos/ingenieros TI de las oficinas de SASIPA en Rapa Nui».
+
+### Actions taken
+- Leídos antes de redactar: `README.md`, `docs/troubleshooting.md`, el manual de
+  despliegue de la guía SASIPA (estado al 17-nov, fases 0 a 3, criterios de
+  aceptación), el `README.es.md` del gateway (para no duplicarlo), `.env.example`,
+  `configure.py --help` y la lógica de salida de `inspector.py`.
+- Escrito `README.es.md` (339 líneas): qué es y cómo encaja con el gateway, la
+  red de Rapa Nui, preparación del portátil (Linux/macOS y Windows), cinco
+  tareas habituales, lo que no se debe hacer, tabla de síntomas y glosario.
+- `README.md`: agregado el enlace de idioma (`**English** · [Español]`), con la
+  misma forma que el del gateway. `docs/project-overview.md`: un punto nuevo en
+  la estructura de directorios.
+- Verificados los enlaces y anclas internos del documento (0 problemas).
+
+### Decisions
+- **Cubre solo las radios.** El servidor y el tablero ya tienen su propio
+  `README.es.md` en el gateway para el mismo público; repetirlos habría creado
+  dos fuentes que se desfasan. Esto también respeta la regla 2: aquí no se
+  describen el broker, la base de datos ni los contenedores.
+- **Se redactó por tareas, no por módulos.** El público no programa: necesita
+  saber qué comando correr, qué esperar y cuándo parar. Se omitieron las
+  secciones de pruebas, decodificador y estructura del código, que están en
+  `README.md`.
+- **`git clone` sin `--recursive`.** Se verificó que ningún código ni prueba usa
+  `external/`; los submódulos solo añaden peso y un posible problema de acceso.
+- **El archivo oficial es el del gateway** (usuario, 2026-11-16): el documento lo
+  dice y establece el sentido de la copia (primero allá, byte a byte aquí).
+- **No se incluyó ningún dato de contacto.** No hay uno en el repositorio ni en
+  la guía; el documento remite a «quien administra la malla», como la guía.
+- No se incluyen valores de claves ni de PIN (regla 8): solo los nombres de las
+  variables de `.env`.
+
+### Outcomes
+- El documento es autocontenido para las cinco tareas del día a día y declara,
+  fechadas, tres diferencias entre el archivo y el terreno (estado, antenas de
+  fibra en N2/N3/N4 contra N2/N5/N6, sensores de N1 y N3), tomadas de la guía.
+- Comprobado en el código: tanto una clave de canal como el PIN ausentes detienen
+  `provision`; `inspect` sale con 0 solo sin diferencias y con 1 ante cualquiera.
+
+### Next steps / open questions
+- **Falta una línea de contacto** para el equipo de SASIPA.
+- **Pendiente de verificar con una radio**: la guía dice que en un nodo SenseCAP
+  `inspect` reporta 22 dBm contra 30 declarados, pero `inspector.py` compara
+  `lora.tx_power` tal como se le dijo a la radio (30), lo que daría coincidencia;
+  el README evita afirmar cuál de las dos cosas pasa. Probar con una radio real y
+  corregir la guía o el código.
+- El repositorio se clona por HTTPS en el documento, como en la guía; si es
+  privado, el equipo necesitará acceso previo. No se pudo confirmar.
+- Los comandos de PowerShell no se ejecutaron en Windows.
+
+---
+
 ## 2026-11-16 — Guía SASIPA: rutas con los nodos instalados
 **Time:** 11:15 (aprox)
 **User request:** ver las posiciones de los nodos ya instalados en Rapa Nui

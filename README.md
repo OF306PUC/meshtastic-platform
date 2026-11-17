@@ -1,5 +1,7 @@
 # meshtastic-platform
 
+**English** · [Español](README.es.md)
+
 Configure the radios of a Meshtastic mesh from one file, check that each one
 is set up the way that file says, and listen to the mesh to study the channel.
 

@@ -272,6 +272,10 @@ pyflakes. Diagrams: pdflatex.
 
 See the Layout section of the README. Also:
 
+* `README.es.md`: the operator guide for SASIPA's IT staff (Spanish): what each
+  radio is, the routine `show` / `inspect` / `provision` / `receiver` tasks, what
+  not to do, and a symptom table. It describes the radios only; the server is the
+  gateway's own README.es.md.
 * `docs/`: flashing, troubleshooting, the session log, this file,
   `diagrams/`, `architecture/` (ADR-0001, ADR-0002), `scalability/` and
   `testbeds/`.
